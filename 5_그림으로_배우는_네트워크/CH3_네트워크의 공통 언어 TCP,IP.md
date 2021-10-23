@@ -275,3 +275,73 @@
     - 데이터 수신 확인(ACK) 데이터가 제대로 도착하지 않으면 재전송
     - 네트워크가 혼잡하면 데이터 전송 속도를 제한함  = 플로우 제어
   3. TCP 커넥션 끊기
+
+## 3-19 시퀀스 번호, ACK 번호
+- TCP 헤더 형식
+  - ![TCP헤더](https://t1.daumcdn.net/cfile/tistory/9948B8415C6F93100F)
+  - 가장 중요한 것은 포트번호: 데이터를 배분할 수 있기 때문에
+  - sequence number는 TCP 로 전송하는 데이터 순서를 나타냄
+  - acknowledgement number는 데이터를 바르게 수신했음을 확인
+- 데이터 분할 구조
+  - TCP에서 어플리케이션 데이트럴 분할하는 단위 = MSS(Maximum Segment Size)
+  - MSS의 표준 크기는 1460바이트
+  - ![Fragmentation 예시](https://i.stack.imgur.com/0XaEs.png)
+  - ![MTU/MSS](https://ejjoo.github.io/public/images/2020-01-08-tcp-mss-udp-1.png)
+
+---
+
+## 3-20 UDP
+- UDP
+  - 데이터를 적절한 어플리케이션에 배분하는 기능만 있는 프로토콜
+  - TCP처럼 동작 확인을 하지 않음
+  - TCP에 비해 헤더가 단순함
+  - ![UDP헤더](https://cdn.ttgtmedia.com/rms/onlineimages/networking-udp_mobile.png)
+- UDP 이용 사례
+  - 확인 작업이 없어 데이터 전송 효울이 좋으나 신뢰성은 낮음
+  - 크기가 큰 데이터를 분할하는 기능은 없음
+  - IP전화에서 많이쓰임
+    - 보통 1초를 50개로 분할하여 설정 => 음성 데이터 1개가 20ms 분량
+    
+---
+
+## 3-21 이름해석, 호스트 이름, DNS
+- TCP/IP로 통신할 때는 상대방의 IP를 반드시 지정해야 함.
+- 이름해석
+  - IP주소 보다 이해하기 쉬운 **호스트명**을 씀
+  - 호스트명에 대응하는 IP주소를 구하는 것 = DNS의 역할 = 이름해석
+  - DNS는 이름해석 방법 중 하나
+- DNS로 부터 받은 IP로 상대 호스트에 접속
+
+---
+
+## 3-22 리소스 레코드, DNS 리졸버, 재귀질의
+- DNS 서버
+  - DNS서버에 '호스트명:IP주소' 를 미리 등록해둠
+  - DNS 서버에 대응 정보 이외에도 여러가지 정보를 입력하는데 이 때 정보를 **리소스 레코드**라 칭함.
+    - ![주요 리소스 레코드](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcROfTdNMrYpdAh16FL0fsSGib4cyAVOVD4DxQ&usqp=CAU)
+- DNS의 이름해석
+  - DNS 서버에 질의하는 기능은 OS에 내정되어 있고, 이를 **DNS Resolver**라고 부름
+  - DNS 서버는 루트부터 시작되는 계층구조
+  - DNS 서버에 호스트명에 해당하는 IP 정보가 없으면 **재귀질의**를 통해 IP주소를 질의함
+  - ![질의 예시](https://d1.awsstatic.com/Route53/how-route-53-routes-traffic.8d313c7da075c3c7303aaef32e89b5d0b7885e7c.png)
+  - DNS서버와 resolver는 한번 질의 하면 캐시에 보존
+
+---
+
+## 3-23 DHCP
+- 통신하기 위해선 TCP/IP설정이 바르게 되어있어야 함.
+- 위의 설정을 자동화해주는 프로토콜이 **DHCP**
+- DHCP의 동작
+  - DHCP의 서버에 미리 할당할 IP 주소나 TCP/IP 설정등을 등록해 둠
+  - DHCP 클라이언트가 되도록 설정
+  - DHCP 클라이언트의 호스트가 네트워크에 접속하면 자동으로 TCP/IP 설정을 함
+    - ![DHCP 과정](https://download.huawei.com/mdl/image/download?uuid=3401fd9b7fe3412488357932dcdf1809)
+    - DHCP DISCOVER
+      - DHCP 서버가 있는지 확인.
+    - DHCP OFFER
+      - 사용할 수 있는 TCP/IP 설정을 반환
+    - DHCP REQUEST
+      - TCP/IP 설정 요청
+    - DHCP ACK
+      - 확인
+
