@@ -14,7 +14,7 @@
     - 인터넷층: End to End 통신(IP, ICMP, ARP 등)
     - 네트워크 인터페이스층: 프로토콜 선택 (이더넷, 무선 LAN 등)
   - OSI 7Layer vs TCP/IP 4Layer
-    - ![OSI 7Layer vs TCP/IP 4Layer](https://raonctf.com/static/essential/images/network/network_layer_02.jpg)
+    - ![OSI 7Layer vs TCP/IP 4Layer](https://blog.kakaocdn.net/dn/uSn7R/btq9ml8Irna/cFTH47v7ynIR2UO9q9Tw70/img.png)
 
 ---
 
@@ -127,7 +127,7 @@
 - IP 헤더에 목적지에 따라 아래 3가지의 IP를 추가함
   - 유니캐스트
     - 한 곳으로 데이터를 전송
-    - 복수의 곳으로 데이트를 전송하기 위해서 유니캐스트를 반복하여도 되지만, 효율이 좋지 않음
+    - 복수의 곳으로 데이터를 전송하기 위해서 유니캐스트를 반복하여도 되지만, 효율이 좋지 않음
   - 브로드 캐스트
     - 같은 네트워크 상의 모든 호스트에 완전히 똑같은 데이터를 전송
   - 멀티캐스트
@@ -203,7 +203,7 @@
   - 반대로, 출발지가 공인 네트워크이면 응답을 받지 못함
   - 목적지가 사설 주소로 된 IP 패킷은 폐기함
 - 주소 변환
-  - 사설 네트워크에서 인터넷으로 통시낳기 위해서는 NAT로 주소를 변환
+  - 사설 네트워크에서 인터넷으로 통신하기 위해서는 NAT로 주소를 변환
     - 출발지 IP 주소를 변환
     - 라우터는 '기존 IP : 변환한 IP'를 NAT 테이블에 보존
     - 응답이 라우터로 돌아오면 목적지 IP 주소를 NAT 테이블을 보고 변환 
@@ -269,11 +269,11 @@
   1. TCP 커넥션 맺기
      - 어플리케이션간 통신이 정상적으로 이루어졌는지 확인함 = 3-way handshake
   2. 어플리케이션 간 데이터 송수신
-    - 어플리케이션의 데이터에 어플리케이션 프로토콜 헤더와 TCP 허더를 추가 해야함 = TCP 세그먼트
-    - 만약에 TCP 세그먼트가 크면 복수의 TCP 세그먼트로 전송
-    - 어떻게 분할했는지는 TCP 헤더에 기술대고 목적지에서 원본 데이터로 조립됨
-    - 데이터 수신 확인(ACK) 데이터가 제대로 도착하지 않으면 재전송
-    - 네트워크가 혼잡하면 데이터 전송 속도를 제한함  = 플로우 제어
+       - 어플리케이션의 데이터에 어플리케이션 프로토콜 헤더와 TCP 헤더를 추가 해야함 = TCP 세그먼트
+       - 만약에 TCP 세그먼트가 크면 복수의 TCP 세그먼트로 전송
+       - 어떻게 분할했는지는 TCP 헤더에 기술대고 목적지에서 원본 데이터로 조립됨
+       - 데이터 수신 확인(ACK) 데이터가 제대로 도착하지 않으면 재전송
+       - 네트워크가 혼잡하면 데이터 전송 속도를 제한함  = 플로우 제어
   3. TCP 커넥션 끊기
 
 ## 3-19 시퀀스 번호, ACK 번호
@@ -283,7 +283,7 @@
   - sequence number는 TCP 로 전송하는 데이터 순서를 나타냄
   - acknowledgement number는 데이터를 바르게 수신했음을 확인
 - 데이터 분할 구조
-  - TCP에서 어플리케이션 데이트럴 분할하는 단위 = MSS(Maximum Segment Size)
+  - TCP에서 어플리케이션 데이터를 분할하는 단위 = MSS(Maximum Segment Size)
   - MSS의 표준 크기는 1460바이트
   - ![Fragmentation 예시](https://i.stack.imgur.com/0XaEs.png)
   - ![MTU/MSS](https://ejjoo.github.io/public/images/2020-01-08-tcp-mss-udp-1.png)
@@ -297,7 +297,7 @@
   - TCP에 비해 헤더가 단순함
   - ![UDP헤더](https://cdn.ttgtmedia.com/rms/onlineimages/networking-udp_mobile.png)
 - UDP 이용 사례
-  - 확인 작업이 없어 데이터 전송 효울이 좋으나 신뢰성은 낮음
+  - 확인 작업이 없어 데이터 전송 효율이 좋으나 신뢰성은 낮음
   - 크기가 큰 데이터를 분할하는 기능은 없음
   - IP전화에서 많이쓰임
     - 보통 1초를 50개로 분할하여 설정 => 음성 데이터 1개가 20ms 분량
@@ -320,7 +320,7 @@
   - DNS 서버에 대응 정보 이외에도 여러가지 정보를 입력하는데 이 때 정보를 **리소스 레코드**라 칭함.
     - ![주요 리소스 레코드](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcROfTdNMrYpdAh16FL0fsSGib4cyAVOVD4DxQ&usqp=CAU)
 - DNS의 이름해석
-  - DNS 서버에 질의하는 기능은 OS에 내정되어 있고, 이를 **DNS Resolver**라고 부름
+  - DNS 서버에 질의하는 기능은 OS에 내장되어 있고, 이를 **DNS Resolver**라고 부름
   - DNS 서버는 루트부터 시작되는 계층구조
   - DNS 서버에 호스트명에 해당하는 IP 정보가 없으면 **재귀질의**를 통해 IP주소를 질의함
   - ![질의 예시](https://d1.awsstatic.com/Route53/how-route-53-routes-traffic.8d313c7da075c3c7303aaef32e89b5d0b7885e7c.png)
@@ -335,7 +335,7 @@
   - DHCP의 서버에 미리 할당할 IP 주소나 TCP/IP 설정등을 등록해 둠
   - DHCP 클라이언트가 되도록 설정
   - DHCP 클라이언트의 호스트가 네트워크에 접속하면 자동으로 TCP/IP 설정을 함
-    - ![DHCP 과정](https://download.huawei.com/mdl/image/download?uuid=3401fd9b7fe3412488357932dcdf1809)
+    - ![DHCP 과정](https://forum.huawei.com/enterprise/en/data/attachment/forum/202108/16/191021gp638vhullwnaso8.jpg?DHCP%201.jpg)
     - DHCP DISCOVER
       - DHCP 서버가 있는지 확인.
     - DHCP OFFER

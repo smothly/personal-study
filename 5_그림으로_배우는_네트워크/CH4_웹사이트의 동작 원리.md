@@ -8,7 +8,7 @@
   1. 웹브라우저에서 웹서버 어플리케이션에 파일 전송 요청을 보냄
   2. 웹서버 어플리케이션은 요청받은 파일을 응답으로 돌려보냄
   3. 웹브라우저에서 수신한 파일을 표시
-- 웹사이트에 접속에 이용하는 프로토콜의 조합읜 똑같다.
+- 웹사이트에 접속에 이용하는 프로토콜의 조합은 똑같다.
 - ![응답예시](https://blog.kakaocdn.net/dn/mFgvh/btqMPiNuADf/8xS3pT40500B288GS9JvI1/img.png)
 
 ---
@@ -45,7 +45,7 @@
   - Uniform Resource Locator
   - http는 스킴으로 접속하기 위한 프로토콜
   - <스킴>://<호스트명>/<경로명>
-- ![URL예시](https://lh3.googleusercontent.com/proxy/zvH8oIuA3Txg7LL97CTGypR6c19IE7pNBSY_k8Xfn1qHzzGdgKCZpUkciymuiOhJRSmoM7ksFJ2eLtpK)
+- ![URL예시](https://www.beusable.net/blog/wp-content/uploads/2021/02/image-7.png)
 
 ---
 
@@ -65,7 +65,7 @@
 - HTTP 리스폰스
   - 리스폰스 라인, 메시지 헤더, 엔티티 바디로 구성
   - 리스폰스 라인은 다시 버전 / 상태코드 / 설명문으로 나뉨
-  - ![response 구조](https://lh3.googleusercontent.com/proxy/IOfTa5qU9S3KtVT-ILQFC_QsTCBbQzKQ9dfCuKhmOIn-1R63NH27xt4PLNRyRhfwXv2_0EOKlanX1uC1jMnOOY09lSiHsg33_a7aCtUF9KY)
+  - ![response 구조](https://media.vlpt.us/post-images/rosewwross/6fc65770-4b39-11ea-abce-67c155f8f58a/image.png)
   - 상태코드는 200 / 404 가 주로 보임.
   - 웹브라우저에 돌려내는 파일은 주로 HTML 
 
@@ -130,5 +130,4 @@
     3. TCP/IP에서 응답받은 IP주소를 지정하여 TCP 커넥션을 맺음
     4. HTTP request/response를 주고 받음 
     5. TCP에서 복수로 분할된 웹페이지의 파일을 조립하여 웹브라우저에서 내용을 표시
-  - 
 

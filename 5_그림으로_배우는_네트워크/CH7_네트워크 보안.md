@@ -68,7 +68,7 @@
   - 수신자는 송신자의 공개키를 이용해 서명 데이터를 복호
   - 수신자는 수신한 데이터로부터 해시값을 생성
   - 수신자가 생성한 해시값과 서명의 해시값을 비교. 해시값이 같아야함
-  - ![디지털 서명 과정 도식화](https://blog.kakaocdn.net/dn/bKFKoG/btqwJdazYUc/CkUF2u3GtgdKMmf77JlhQK/img.png)
+  - ![디지털 서명 과정 도식화](https://t1.daumcdn.net/cfile/tistory/2117354956E4E16F2B)
 
 ---
 
@@ -98,7 +98,7 @@
   - 공개키 암호화를 사용하면 부하가 커서 주고받는 데이터 자체를 공개키로 암호화하는 것은 아님
   - 공통키를 디지털 인증서에 포함된 공개키로 암호화(공동키를 생성하는 기반이 되는 데이터를 공개키로 암호화)
   - 나머지는 공통키를 사용한 공통키 암호방식으로 데이터를 암호화
-  - ![SSL 암호화](https://i.imgur.com/NWmUEzb.png)
+  - ![SSL 암호화](https://goodgid.github.io/assets/img/http/tls_ssl_2.png)
 
 ---
 
