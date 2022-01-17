@@ -24,3 +24,6 @@
 6. 데이터 분석을 위한 SQL 레시피
    - 읽는중...
    - [책 링크](http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=9791162240601)
+7. 비트코인 블록체인 바이블
+   - 읽는중...
+   - [책 링크](http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=9791158392697)
