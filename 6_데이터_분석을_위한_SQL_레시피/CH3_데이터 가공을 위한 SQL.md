@@ -622,7 +622,6 @@ GROUP BY
 - 윈도 함수를 사용해 집약 함수의 결과와 원래 값을 동시에 다루는 쿼리
   - `OVER` 구문에 윈도 함수 지정
   - 매개변수 지정하지 않으면 테이블 전체, `PARTITION BY <컬럼>` 을 지정하면 컬럼 기반으로 그룹화하고 집약함수 지정
-  - 
 ```SQL
 SELECT
   user_id
@@ -799,3 +798,165 @@ SELECT DISTINCT
 FROM popular_products
 ;
 ```
+
+#### 7-3 세로 기반 데이터를 가로 기반으로 변환하기
+- 행으로 지정된 지표 값을 열로 변환하는 쿼리
+```SQL
+SELECT
+  dt
+  , MAX(CASE WHEN indicator = 'impressions' THEN val END) AS impressions
+  , MAX(CASE WHEN indicator = 'sessions' THEN val END) AS implressions
+  , MAX(CASE WHEN indicator = 'users' THEN val END) AS users
+FROM daily_kpi
+GROUP BY dt
+ORDER BY dt
+;
+```
+- 행을 집약해서 쉼표로 구분된 문자열로 변환하기
+```SQL
+SELECT
+  purchase_id
+
+  -- 상품 ID 배열에 집약하고, 쉼표로 구분된 문자열로 변환
+  -- PostgreSQL, BigQuery의 경우는 string_agg 사용하기
+  , string_agg(product_id, ',') AS product_ids
+
+  -- Redshift, listagg 사용
+  , listagg(product_id, ',') AS product_ids
+
+  -- Hive, SparkSQL, collect_list, concat_ws 사용
+  , concat_ws(',' collect_list(product_id)) AS product_ids
+  , SUM(price) AS amount
+FROM purchase_detail_log
+GROUP BY purchase_id
+ORDER BY purchase_id
+```
+
+#### 7-4 가로 기반 데이터를 세로 기반으로 변환하기
+- 컬럼으로 표현된 가로 기반 데이터는 데이터의 수가 고정되었다는 특징을 가짐
+- 데이터 수와 같은 수의 일련 번호를 가진 `피벗 테이블`를 만들고 `CROSS JOIN`진행
+```SQL
+SELECT
+  q.year
+
+  -- q1부터 q4까지 레이블 이름 출력하기
+  , CASE
+    WHEN p.idx = 1 THEN 'q1'
+    WHEN p.idx = 2 THEN 'q2'
+    WHEN p.idx = 3 THEN 'q3'
+    WHEN p.idx = 4 THEN 'q4'
+  END AS quarter
+  
+  -- q1에서 q4까지의 매출 출력
+  , CASE
+    WHEN p.idx = 1 THEN q.q1
+    WHEN p.idx = 2 THEN q.q2
+    WHEN p.idx = 3 THEN q.q3
+    WHEN p.idx = 4 THEN q.q4
+  END AS sales
+FROM
+  quarterly_sales AS q
+CROSS JOIN
+-- 행으로 전개하고 싶은 열의 수만큼, 순번 테이블 만들기
+  (SELECT 1 AS idx
+  UNION ALL SELECT AS 2 AS idx
+  UNION ALL SELECT AS 3 AS idx
+  UNION ALL SELECT 4 AS idx
+  ) AS p
+```
+- 테이블 함수를 사용해 배열을 행으로 전개하는 쿼리
+```SQL
+-- PostgreSQL의 경우 unnest 함수 사용하기
+SELECT unnest(ARRAY['A001', 'A002' 'A003']) AS product_id;
+
+-- BigQuery의 경우도 unnest 함수를 사용
+-- 테이블 함수는 FROM에서만 사용 가능
+SELECT * FROM unnest(ARRAY['A001', 'A002', 'A003']) AS product_id;
+
+-- Hive, SparkSQL의 경우 explode 함수 사용
+ SELECT explode(ARRAY('A001', 'A002', 'A003')) AS product_id;
+```
+- 테이블 함수를 사용해 쉼표로 구분된 문자열 데이터를 행으로 전개하는 쿼리
+```SQL
+SELECT
+  purshase_id
+  , product_id
+FROM
+  purchase_log AS p
+-- string_to_array 함수, 문자열 -> 배열 변환, unnest 함수로 테이블 변환
+CROSS_JOIN unnest(string_to_array(product_ids, ',')) AS product_id
+
+-- BigQuery의 경우 문자열 분해에 split 함수 사용
+CROSS_JOIN unnest(split(product_ids, ',')) AS product_id
+
+-- Hive, SparkSQL, LATERAL VIEW explode 사용
+LATERAL VIEW explode(split(product_ids, ',')) e AS product_id
+```
+- PostgreSQL에서 쉼표로 구분된 데이터를 행으로 전개하는 쿼리
+```SQL
+SELECT
+  purcahse_id
+  -- 쉼표로 구분된 문자열을 한번에 행으로 전개
+  , regexp_split_to_table(product_ids, ',') AS prodcut_id
+FROM purchase_log;
+```
+- Redshift는 배열 자료형을 제공하지않아 전처리가 더 필요
+  - 일련 변호(데이터 최대 수)를 가진 피벗 테이블을 만드는 쿼리
+  ```SQL
+    SELECT *
+    FROM (
+      SELECT 1 AS idx
+      UNION ALL SELECT 2 AS idx
+      UNION ALL SELECT 3 AS idx
+    ) AS pivot
+    ;
+  ```
+  - split_part 함수의 사용 예 (n번째 요소 추출)
+  ```SQL
+  SELECT
+  split_part('A001,A002,A003', ',', 1) AS part_1
+  , split_part('A001,A002,A003', ',', 2) AS part_2 
+  , split_part('A001,A002,A003', ',', 3) AS part_3
+  ;
+  ```
+  - 문자 수의 차이를 사용해 상품 수를 계산하는 쿼리
+  ```SQL
+  SELECT
+  purchase_id
+  , product_ids
+  -- 상품 ID의 문자열을 기반으로 쉼표를 제거
+  -- 문자 수의 차이를 계산하여 상품수 계산
+  , 1 + char_length(product_ids)
+   - char_length(replace(product_ids, ',', ''))
+  AS product_num
+  FROM
+    purchase_log
+  ;
+  ```
+  - 피벗 테이블을 사용해 문자열을 행으로 전개하는 쿼리
+  ```SQL
+  SELECT
+  l.purchase_id
+  , l.product_ids
+  -- 상품 수만큼 순번 붙이기
+  , p.idx
+  -- 문자열 쉼표 구분하여 분할, idx 요소 추출
+  , split_part(l.product_ids, ',', p.idx) AS product_id
+  FROM
+    purchase_log AS l
+  JOIN
+    ( SELECT 1 AS idx
+      UNION ALL SELECT 2 AS idx
+      UNION ALL SELECT 3 AS idx
+    ) AS p
+  -- 피벗 테이블의 id가 상품 수 이하인 경우 결합
+  ON p.idx <=
+    (1 + char_length(l.product_ids)
+      - char_length(replace(l.product_ids, ',', '')))
+  ;
+  ```
+- SQL을 레코드 단위로 분할해두는 것이 기본이지만 1개의 레코드에 집약시키지 못하는 경우가 있어 데이터를 행으로 변환하는 테크닉을 이용해야 함.
+
+---
+
+## 8강 여러 개의 테이블 조작하기
