@@ -585,3 +585,217 @@ FROM
   -- PostgreSQL의 경우 명시적 자료형 변환
   (SELECT CAST('192.168.0.1' AS text) AS ip) AS t
 ```
+
+## 7강 하나의 테이블에 대한 조작
+- 레코드 하나하나가 아닌 대량의 데이터를 집계하여 전체의 특징을 파악(집약)
+
+#### 7-1 그룹의 특징 잡기
+- 상품 평가 테이블
+- 집약 함수를 사용해서 테이블 전체의 특징량을 계산하는 쿼리
+```SQL
+SELECT
+  COUNT(*) AS total_count
+  , SUM(score) as sum
+  , AVG(score) as avg
+  , MAX(score) as max
+  , MIN(score) as min
+FROM
+  review
+;
+```
+- 그루핑한 데이터 특징량 계산
+```SQL
+SELECT
+  user_id
+  , COUNT(DISTINCT user_id) AS user_count
+  , COUNT(DISTINCT product_id) AS product_count
+  , SUM(score) as sum
+  , AVG(score) as avg
+  , MAX(score) as max
+  , MIN(score) as min
+FROM
+  review
+GROUP BY
+  user_id
+;
+```
+- 윈도 함수를 사용해 집약 함수의 결과와 원래 값을 동시에 다루는 쿼리
+  - `OVER` 구문에 윈도 함수 지정
+  - 매개변수 지정하지 않으면 테이블 전체, `PARTITION BY <컬럼>` 을 지정하면 컬럼 기반으로 그룹화하고 집약함수 지정
+  - 
+```SQL
+SELECT
+  user_id
+  , product_id
+  , score
+  , AVG(score) OVER() AS avg_score -- 전체 평균 리뷰 점수
+  , AVG(score) OVER(PARTITION BY user_id) AS user_avg_score -- 사용자 평균 리뷰 점수
+  , score - AVG(score) OVER(PARTITION BY user_id) AS user_avg_score_diff -- 개별 리뷰 점수 - 사용자 평균 리뷰 점수
+FROM
+  review
+;
+```
+
+#### 7-2 그룹 내부의 순서
+- SQL은 기본적으로 순서가 없어 순위 작성이나 시간 순서를 다루는 것이 어려웠음
+- 윈도함수가 등장하면서 이 과정이 쉬워짐
+  - `RANK`는 같은 순위 허용(1, 2, 2, 4) `DENSE_RANK`는 (1, 2, 2, 3) 처럼 순위를 매김
+  - `LAG`는 앞에 있는 행의 값 `LEAD`는 뒤의 있는 행의 값 추출
+  - `OVER` 구문 내부에 `ORDER BY` 구문을 사용하여 데이터의 순서를 정의
+- 윈도 함수의 ORDER BY 구문을 사용해 테이블 내부의 순서를 다루는 쿼리
+```SQL
+SELECT
+  product_id
+  , score
+  -- 점수 순서로 유일한 순위
+  , ROW_NUMBER()  OVER(ORDER BY score DESC) AS row
+  -- 같은 순위 허용, 순위
+  , RANK()        OVER(ORDER BY score DESC) AS rank
+  -- 같은 순위 허용, 순위 숫자는 건너뜀
+  , DENSE_RANK()  OVER(ORDER BY score DESC) AS dense_rank
+
+  -- 현재 행보다 앞에 있는 행 추출
+  , LAG(product_id)       OVER(ORDER BY score DESC) AS lag1
+  , LAG(product_id, 2)    OVER(ORDER BY score DESC) AS lag2
+
+  -- 현재 행보다 뒤에 있는 행 추출
+  , LEAD(product_id)      OVER(ORDER BY score DESC) AS lead1
+  , LEAD(product_id, 2)   OVER(ORDER BY score DESC) AS lead2
+FROM popular_products
+ORDER BY row
+;
+```
+- `ROWS` 구문은 윈도 프레임 지정
+- `FIRST_VALUE`, `LAST_VALUE`
+- ORDER BY 구문과 집약 함수를 조합해서 계산하는 쿼리
+```SQL
+SELECT
+  produt_id
+  , score
+
+  , ROW_NUMBER()  OVER(ORDER BY score DESC) AS row
+
+  -- 순위 상위부터의 누계 구하기
+  , SUM(score)
+      OVER(ORDER BY score DESC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+      AS cum_score
+  
+  -- 현재 행 기준 전/후 총 3개행의 평균
+  , AVG(score)
+      OVER(ORDER BY order DESC
+          ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING)
+      AS local_avg
+  
+  -- 순위가 높은 상품 ID(윈도 내부의 첫 레코드)
+  , FIRST_VALUE(product_id)
+      OVER(ORDER BY score DESC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+      AS first_value
+  
+  -- 순위가 낮은 상품 ID(윈도 내부의 마지막 레코드)
+  , LAST_VALUE(product_id)
+      OVER(ORDER BY score DESC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+      AS last_value
+
+FROM popular_products
+ORDER BY row
+;
+```
+- 윈도 프레임 지정
+  - 기본은 `ROWS BETWEEN start AND end`
+    - `start`와 `end`는 `CURRENT_ROW`, `n PRECENDING`(n행 앞), `n FOLLOWING`(n행 뒤), `UNBOUBDED PRECENDING`(이전 행 전부), `UNBOUBDED FOLLOWING`(이후 행 전부) 등의 키워드를 지정
+  - redshift에서는 `listagg`함수가 유사하게 있으나 프레임 지정과 동시에 사용할 수 없음
+  - `ORDER BY` 절이 없으면 모든 행
+  - `ORDER BY` 절의 default는 첫 행에서 현재 행까지
+- 윈도 프레임 지정별 상품 ID를 집약하는 쿼리
+```SQL
+SELECT
+  product_id
+  , ROW_NUMBER()  OVER(ORDER BY score DESC) AS row
+
+  -- 가장 앞 순위부터, 뒷 순위까지의 범위를 대상으로 상품 ID 집약
+  -- PostgreSQL, array_agg
+  , array_agg(product_id)
+  -- Hive/SparkSQL, collect_list 사용
+  , collect_list(product_id)
+      OVER(ORDER BY score DESC
+      ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+  AS whole_agg
+
+  -- 가장 앞 순위부터 현재 순위까지의 범위를 대상으로 상품 ID 집약
+  -- PostgreSQL, array_agg
+  , array_agg(product_id)
+  -- Hive/SparkSQL, collect_list 사용
+  , collect_list(product_id)
+      OVER(ORDER BY score DESC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+  AS cum_agg
+
+  -- 순위 하나 앞/뒤까지의 범위를 대상으로 상품 ID 집약
+  , array_agg(product_id)
+  , collect_list(product_id)
+      OVER(ORDER BY score DESC
+          ROWS BETWEEEN 1 PRECEDING AND 1 FOLLOWING)
+  AS local_agg
+FROM popular_products
+WHERE category='action'
+ORDER BY row
+;
+```
+- PARTITION BY와 ORDER BY를 조합하여 카테고리들의 순위를 계산하는 쿼리
+```SQL
+SELECT
+  category
+  , product_id
+  , score
+
+  -- 카테고리별 점수 순서로 정렬, 유일 순위
+  , ROW_NUMBER()
+      OVER(PARTITION BY category ORDER BY score DESC)
+  AS row
+
+  -- 카테고리별 같은 순위 허가, 순차 순위
+  , RANK()
+      OVER(PARTITION BY category ORDER BY score DESC)
+  AS rank
+
+  -- 카테고리별 같은 순위 허가, 점프 순위
+  , DENSE_RANK()
+      OVER(PARTITION BY category ORDER BY score DESC)
+  AS dense_rank
+FROM popular_products
+ORDER BY category, row
+;
+```
+- 카테고리들의 순위 상위 2개까지의 상품을 추출하는 쿼리
+```SQL
+SELECT *
+FROM
+
+-- 서브 쿼리 내부에서 순위 계산
+  ( SELECT
+      category
+      , product_id
+      , score
+      , ROW_NUMBER()
+          OVER(PARTITION BY category ORDER BY score DESC)
+      AS rank
+   FROM popular_products
+  ) AS popular_products_with_rank
+WHERE rank <=2
+ORDER BY category, rank
+;
+```
+- 카테고리별 순위 최상위 상품을 추출하는 쿼리
+```SQL
+SELECT DISTINCT
+  category
+  , FIRST_VALUE(product_id)
+      OVER(PARTITION BY category ORDER BY score DESC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+  AS product_id
+FROM popular_products
+;
+```
