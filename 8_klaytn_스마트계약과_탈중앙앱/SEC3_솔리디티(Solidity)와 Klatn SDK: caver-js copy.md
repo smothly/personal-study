@@ -79,7 +79,7 @@ contract Coin{
   - Bytecode
     - 컨트랙트를 배포할 때 블록체인에 저장하는 정보
     - Bytecode는 Solidity 소스코드를 EVM이 이해할 수 있는 형태로 변환한 것
-    - 컨트랙트 배포시 HEX로 ㅂ표현된 bytecode를 TX에 담아 노드에 전달
+    - 컨트랙트 배포시 HEX로 표현된 bytecode를 TX에 담아 노드에 전달
   - ABI(Application Binary Interface)
     - ABI는 컨트랙트 함수를 JSON형태로 표현한 정보로 EVM이 컨트랙트 함수를 실행할 때 필요
     - 헤더라고 생각하면 됨
@@ -99,4 +99,9 @@ contract Coin{
       - 함수를 다 실행하고 나온 결과를 callback function으로 넘김
   - [wallet](https://ko.docs.klaytn.com/dapp/sdk/caver-js/api-references/caver.wallet)
     - create하면 비밀키/공개키가 자동으로 생성됨
-    - 
+  - [토큰생성tx전송 예시](https://docs.kaikas.io/01_getting_started/03_sending_transactions)
+    - `sendTransaction`은 서명과 전송을 한꺼번에 해줌
+  - [서명](https://ko.docs.klaytn.com/dapp/sdk/caver-js/v1.4.1/api-references/caver.klay.accounts#signtransaction)
+  - [스마트 컨트랙트 배포](https://ko.docs.klaytn.com/getting-started/quick-start/deploy-a-smart-contract#deploying-a-smart-contract-using-truffle)
+    - 기본방식이 있으나 트러플을 사용하는것이 더 간단함
+  - set함수는 트랜잭션으로 실행하여야 하고, call은 상태를 바꾸는 것이 아니기 때문에 노드에서 바로 실행
