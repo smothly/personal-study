@@ -24,9 +24,9 @@
 6. 데이터 분석을 위한 SQL 레시피
    - 읽는중...
    - [책 링크](http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=9791162240601)
-7. 비트코인 블록체인 바이블
-   - 읽는중...
-   - [책 링크](http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=9791158392697)
-8. Klaytn 클레이튼 스마트계약과 탈중앙앱 강의
+7. Klaytn 클레이튼 스마트계약과 탈중앙앱 강의
    - [인프런 강의 + 강의자료](https://www.inflearn.com/course/klaytn-%EC%8A%A4%EB%A7%88%ED%8A%B8%EA%B3%84%EC%95%BD%EA%B3%BC-%ED%83%88%EC%A4%91%EC%95%99%EC%95%B1#curriculum)
    - P2E 게임의 배경지식을 위함
+8. 스트리밍 시스템
+   - [책 링크](http://www.yes24.com/Product/Goods/102360104)
+   - 
