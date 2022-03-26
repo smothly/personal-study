@@ -29,4 +29,6 @@
    - P2E 게임의 배경지식을 위함
 8. 스트리밍 시스템
    - [책 링크](http://www.yes24.com/Product/Goods/102360104)
-   - 
+9. 최신 데이터 인프라 이해하기
+   - [유튜브 링크](https://www.youtube.com/playlist?list=PLL-_zEJctPoJ92HmbGxFv1Pv_ugsggGD2)
+   - 최신 데이터 인프라에 대한 overview 정도의 내용들을 담고 있음.
