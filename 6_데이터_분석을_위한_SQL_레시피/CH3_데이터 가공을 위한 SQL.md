@@ -960,3 +960,286 @@ FROM purchase_log;
 ---
 
 ## 8강 여러 개의 테이블 조작하기
+- 정규화된 RDB의 여러개 테이블을 함께 봐야하는 경우
+- 하나의 큰 로그를 다루는 경우
+
+#### 8-1 여러 개의 테이블을 세로로 결합하기
+- 두 테이블이 컬럼이 일치해야 함
+  - UNION ALL 구문을 사용해 테이블을 세로로 결합하는 쿼리
+  - SELECT 구문으로 불피료 컬럼 제거 + Default 값 부여로 컬럼을 일치시킴
+  - UNION DISTINCT구문도 있음
+  ```SQL
+  SELECT
+    'app1' AS app_name,
+    user_id,
+    name,
+    email
+  FROM
+    app1_mst_users
+
+  UNION ALL
+
+  SELECT
+    'app2' AS app_name,
+    user_id,
+    name,
+    '' AS email
+  FROM
+    app2_mst_users;
+  ```
+
+#### 8-2 여러 개의 테이블을 가로로 결합하기
+- 가로에 일반적인 결합 방법은 JOIN을 사용하는 것
+  - 카테고리 내에서 제일 잘 팔리는 상품 ID 찾는 쿼리
+  - ID기준으로 단순 결합한 결과로, 카테고리가 결합하지 못하는 문제와 가격이 중복되어 출력되는 문제
+  ```SQL
+  SELECT
+    m.category_id,
+    m.name,
+    s.sales,
+    r.product_id
+  FROM
+    mst_categories m
+  JOIN
+    -- 카테고리별 매출액 결합
+    category_sales s
+    ON m.category_id = s.category_id
+  LEFT JOIN
+    -- 카테고리별 상품 결합하기
+    product_sale_ranking r
+    ON m.category_id = r.category_id;
+  ```
+  - 위 쿼리와 차이점은 LEFT JOIN을 통한 카테고리 누락 방지, rank가 1인 상품만 가져옴
+  ```SQL  
+  SELECT
+    m.category_id,
+    m.name,
+    s.sales,
+    r.product_id
+  FROM
+    mst_categories m
+  -- 카테고리별 매출액 결합
+  LEFT JOIN
+    category_sales s
+    ON m.category_id = s.category_id
+  -- 카테고리별 최고매출 상품만 결합
+  LEFT JOIN
+    product_sale_ranking r
+    ON m.category_id = r.category_id
+    AND r.ranks = 1;
+  ```
+  - 아래 쿼리는 상관 서브 쿼리를 사용해서 마스터 테이블의 행 수가 변할 걱정이 없어 테이블의 누락과 중복을 회피할 수 있음
+  - rank 컬럼이 없어도 order by와 limit으로 처리 가능
+  ```SQL    
+  SELECT
+    m.category_id,
+    m.name,
+    -- 상관 서브쿼리를 사용해 카테고리별로 매출액 추출하기
+    (SELECT s.sales
+    FROM category_sales s
+    WHERE m.category_id = s.category_id
+    ) AS sales,
+    -- 상관 서브쿼리를 사용해 카테고리별로 최고 매출 상품을 하나 추출하기
+    (SELECT r.product_id
+    FROM product_sale_ranking r
+    WHERE m.category_id = r.category_id
+    ORDER BY sales DESC
+    LIMIT 1
+    ) AS top_sale_product
+  FROM
+    mst_categories m;
+  ```
+
+#### 8-3 조건 플래그를 0과 1로 표현하기
+- 마스터 테이블의 속성 조건을 0 또는 1로 표현하기
+- '신용카드 등룍 여부', '구매 이력 여부' 두 가지  조건을 0과 1로 표현
+- `CASE`구문과 `SIGN`함수를 통해 구현 가능
+  - 신용 카드 등록과 구매 이력 유무를 0과 1로 플래그로 나타내는 쿼리
+  ```SQL
+  SELECT
+    c.user_id
+    , c.card_number
+    , COUNT(p.purchase_id) AS purchase_count
+    -- 카드번호가 등록되어 있으면 1, 없으면 0
+    , CASE WHEN c.card_number IS NOT NULL THEN 1 ELSE 0 END AS has_card
+    -- 구매이력 있으면 1, 없으면 0
+    , SIGN(COUNT(o,purchase_id)) AS has_purchased
+  FROM
+    mst_users_with_card_number c
+  LEFT JOIN
+    purchase_log p
+    ON p.user_id = c.user_id
+  GROUP BY
+    c.user_id, c.card_number
+  ;
+  ```
+
+#### 8-4 계산한 테이블에 이름 붙여 재사용하기
+- 복잡한 서브 쿼리의 중첩보다는 일시적인 테이블(CTE(WITH구문)) 사용
+- 카테고리별 상품 매출 순위
+  - 카테고리별 순위를 추가한 테이블에 이름 붙이기
+  ```SQL
+  WITH
+  product_sales_ranking AS (
+    SELECT
+      category_name,
+      product_id,
+      sales,
+      ROW_NUMBER() OVER(PARTITION BY category_name ORDER BY sales DESC) AS ranks
+    FROM
+      product_sales
+  )
+  SELECT *
+  FROM product_sale_ranking
+  ```
+  - 카테고리들의 순위에서 유니크한 순위 목록을 계산하여 횡단적으로 출력
+  ```SQL
+  WITH
+  product_sales_ranking AS (
+    SELECT
+      category_name,
+      product_id,
+      sales,
+      ROW_NUMBER()
+        OVER(PARTITION BY category_name ORDER BY sales DESC)
+        AS ranks
+    FROM
+      product_sales
+  )
+  , mst_rank AS(
+    SELECT
+      DISTINCT ranks AS ranks
+    FROM
+      product_sales_ranking
+    LIMIT 3
+  )
+  SELECT
+    m.ranks
+  , b.product_id AS book
+  , b.sales AS book_sales
+  , c.product_id AS cd
+  , c.sales AS cd_sales
+  , d.product_id AS dvd
+  , d.sales AS dvd_sales
+  FROM
+    mst_rank m
+  LEFT JOIN
+    product_sales_ranking b
+    ON b.ranks = m.ranks
+      AND b.category_name = 'book'
+  LEFT JOIN
+    product_sales_ranking c
+    ON c.ranks = m.ranks
+      AND c.category_name = 'cd'
+  LEFT JOIN
+    product_sales_ranking d
+    ON d.ranks = m.ranks
+      AND d.category_name = 'dvd'
+  ;
+  ```
+
+#### 8-5 유사 테이블 만들기
+- 임의의 레코드를 가진 유사 테이블 만들기
+  - 디바이스 ID와 이름의 마스터 테이블을 만드는 쿼리
+  - `UNION ALL` 처리가 무거워서 레코드가 많으면 성능 문제가 발생할 수 있음
+  ```SQL
+  WITH
+  mst_devices AS (
+    SELECT
+      1 AS device_id, 'Desktop' AS device_name
+    UNION ALL
+    SELECT
+      2 AS device_id, 'Mobile' AS device_name
+    UNION ALL
+    SELECT
+      3 AS device_id, 'Tablet' AS device_name
+  )
+  SELECT
+      user_id
+    , device_name
+  FROM
+    mst_users u
+  LEFT JOIN
+    mst_devices d
+    ON u.register_device = d.device_id
+  ;
+  ```
+  - VALUES 구문을 사용한 유사테이블 만들기(PostgreSQL)
+  ```SQL
+  WITH
+  mst_devices(device_id, device_name) AS (
+    VALUES
+    (1,'PC')
+    ,(2,'SP')
+    ,(3,'애플리케이션')
+  )
+  SELECT *
+  FROM mst_devices
+  ;  
+  ```
+  - 배열형 테이블 함수를 사용한 유사 테이블 만들기(Hive, SparkSQL)
+    - 아래와 같이모든 데이터를 같은 자료형으로 정의해야함
+  ```SQL
+  WITH
+  mst_devices(device_id, device_name) AS (
+    SELECT
+      -- 배열을 열로 전개하기
+      d[0] AS device_id
+      ,d[1] AS device_name
+    FROM(
+      SELECT explode(
+        array(
+          array('1', 'PC')
+          ,array('2', 'SP')
+          ,array('3', '애플리케이션')
+        )) d
+      ) AS t
+    )
+  )
+  SELECT *
+  FROM mst_devices
+  ;
+  ```
+  - map 자료형과 explode 함수를 사용해 동적으로 테이블을 작성하는 쿼리
+  ```SQL
+  WITH
+  mst_devices(device_id, device_name) AS (
+    SELECT
+      -- map자료형의 데이터를 열로 전개하기
+      d['device_id'] AS device_id
+      ,d['device_name'] AS device_name
+    FROM(
+      SELECT explode(
+        array(
+          map('device_id', '1', 'device_name', 'PC')
+          ,map('device_id', '2', 'device_name', 'SP')
+          ,map('device_id', '3', 'device_name', '애플리케이션')
+        )) d
+      ) AS t
+    )
+  )
+  SELECT *
+  FROM mst_devices
+  ;
+- 순번을 사용해 테이블 작성하기
+  - 순번을 가진 유사 테이블을 작성하는 쿼리(postgreSQL Bigquery)
+  ```SQL
+  WITH
+  series AS (
+    -- 1부터 5까지의 순번 생성하기
+    -- psql의 경우 generate_series 사용하기
+    SELECT generate_series(1, 5) AS idx
+    -- Bigquery의 경우 generate_array 사용하기
+    SELECT idx FROM unnest (generate_array(1, 5)) AS idx
+  )
+  SELECT *
+  FROM series
+  ```
+  - repeat 함수를 응용해서 순번을 작성하는 쿼리(Hive, SparkSQL)
+  ```SQL
+  SELECT
+    ROW_NUMBER() OVER(ORDER BY x) AS idx
+  FROM
+    -- repeat 함수와 split 함수를 조합해서 임의의 길이를 가진 배열을 생성하고 explode로 전개하기
+    (SELECT expolode(split(repeatt('x', 5 - 1), 'x')) AS x) AS t
+  ```
