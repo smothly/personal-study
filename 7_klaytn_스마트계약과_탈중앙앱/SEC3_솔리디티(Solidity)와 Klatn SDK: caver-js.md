@@ -3,6 +3,7 @@
 ---
 
 # CH1 스마트 컨트랙트, 솔리디티(Solidity)
+
 - Smart Contracts
   - 특정 주소에 배포되어 있는 **Tx로 실행 가능한 코드**
     - 스마트 컨태랙트 소스코드는 함수와 상태를 표현
@@ -22,8 +23,11 @@
 ---
 
 # CH2 솔리디티 예제 1
+
 # CH3 솔리디티 예제 2
+
 #### 주석으로 설명
+
 ```java
 pragma solidity ^0.5.6; // 솔리디티 버전을 지정
 
@@ -71,6 +75,7 @@ contract Coin{
 ---
 
 # CH4 솔리디티 컴파일링
+
 - EVM에서 실행 가능한 형태로 컴파일 되어야함
 - solc = 솔리디티 컴파일러
   - npm으로 설치 가능
@@ -88,7 +93,8 @@ contract Coin{
 ---
 
 # CH5 Klatyn SDK: caver-js
-- https://ko.docs.klaytn.com/dapp/sdk/caver-js
+
+- <https://ko.docs.klaytn.com/dapp/sdk/caver-js>
 - 스마트 컨트랙트를 실행하는 프로그래밍
 - Klaytn SDK(Software Development Kit)
   - BApp(Block chain) 개발을 위해 필요한 SDK 제공

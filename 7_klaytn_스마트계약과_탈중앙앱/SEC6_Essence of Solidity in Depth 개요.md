@@ -3,6 +3,7 @@
 ---
 
 # CH1 Essence of Solidity in Depth
+
 - 섹션 개요
   - Structure of a Contaract
   - Data Types
@@ -13,6 +14,7 @@
 ---
 
 # CH2 컨트랙트 구조
+
 - Structure of a Contaract
   - State Variables
     - 블록체인에 영구히 저장할 값들을 State Variable로 선언
@@ -25,6 +27,7 @@
   - Function Modifiers
     - 함수의 실행 전, 후의 성격을 정의. 실행조건을 정의하는데 사용됨
     - ex)
+
     ```java
     // 투표 앱 예시
     contract Ballot{
@@ -39,10 +42,12 @@
         // 'onlyChair' modifier ensures that this function is called by the chairperson
     }
     ```
+
   - Events  
     - EVM 로깅을 활용한 시스템
     - 이벤트가 실행될 때마다 트랜잭션 로그에 저장
     - 저장된 로그는 컨트랙트 주소와 연동되어 클라이언트가 RPC로 조회 가능
+
     ```java
     // Contract
     contract Ballot{
@@ -53,6 +58,7 @@
         }
     }
     ```
+
     ```javascript
     // Client using caver-js
     const BallotContract = new caver.klay.Contract(abi, address);
@@ -63,8 +69,10 @@
         }
     }.on('error', console.error)
     ```
+
   - Stuct Types
     - Solidity에서 제공하지 않는 새로운 형식의 자료를 만들 때 사용.
+
     ```java
     contract Ballot{
         struct Voter{
@@ -74,11 +82,13 @@
            uint vote; 
         }
     }
-    ``` 
+    ```
+
   - Enum Types
     - Enum은 임의의 상수를 정의하기에 적합
       - 상태: activae, inactive
       - 요일: monday, tuesday ...
+
     ```java
     contract Ballot{
         enum Status{
@@ -86,11 +96,12 @@
            Closed
         }
     }
-    ``` 
+    ```
 
 ---
 
 # CH3 자료형
+
 - Data types
   - Booleans
   - Integers
@@ -106,7 +117,7 @@
     - 변수끼리 대입할 경우 같은 값을 참조 = Call By Reference
     - 저장되는 위치를 반드시 명시
       - memory: 함수 내에서 유효한 영역에 저장. 함수와 함께 생겼다가 사라짐
-      - storage: state variables와 같이 영속적으로 저장되는 영역에 저장. 
+      - storage: state variables와 같이 영속적으로 저장되는 영역에 저장.
       - calldata: external 함수 인자에 사용되는 공간
       - 서로 다른 영역을 참조하는 변수 간 대입(storage -> memory)이 발생할 시 데이터를 참조가 아니라 복사함
   - **Arrays**
@@ -117,6 +128,7 @@
     - 모든 유형의 데이터를 배열에 담을 수 있음. ex) mapping, struct
     - `.push`, `.length`, `delete`=값들을 지워 초기화해줌
     - 런타임에 만드는 memory 배열은 항상 **new키워드와 size를 지정해주어야함**
+
       ```java
       contract C{
           function f(uint len) public pure {
@@ -125,6 +137,7 @@
           }
       }
       ```
+
     - bytesN vs bytes/string vs byte[]
       - 가능하면 bytes를 사용
         - byte[]는 배열 아이템간 31바이트 패딩이 추가됨
@@ -137,6 +150,7 @@
     - 해시테이블과 유사, 배열처럼 사용
       - storage 영역에만 저장 가능
       - 함수 인자, public 리턴 값으로 사용할 수 없음
+
     ```java
     contract MappingExample {
         mapping(address => uint) public balances;
@@ -146,13 +160,15 @@
         }
     }
     ```
+
   - **Contract Types**
 
 ---
 
 # CH4 컨트랙트 빌트인 값과 함수
+
 - Special Variables and Functions
-  - -
+    - -
     - blockhash(uint blockNumber) returns (bytes32): 블록 해시 (최근 256 블록까지만 조회가능)
     - block.number (uint): 현재 블록 번호
     - block.timestamp (uint): 현재 블록 타임스탬프
@@ -177,10 +193,12 @@
 ---
 
 # CH5 제어구조, 컨트랙트 자료형
+
 - Expressions and Control Structure
   - 제어 구문
     - if, els, while, do, for, break, contunue, return
   - 예외처리 기능 없음(try-catch)
+
   ```java
   // for문
   function loop(uint repeat) public pure returns (uint) {
@@ -191,6 +209,7 @@
     return sum;
   }
   ```
+
   ```java
   // while문
   function whileloop(uint repeat)
@@ -205,10 +224,12 @@
     return sum;
   }
   ```
+
 - Contracts
   - 일반적인 컨트랙트 생성 => 배포
   - 컨트랙트를 클래스처럼 사용
     - new 키워드르 사용
+
   ```java
   contract A {
     B b;
@@ -220,6 +241,7 @@
     }
   }
   ```
+
   - Visibility and Getters
     - external
       - 다른 컨트랙트 & 트랜잭션을 통해 호출 가능
@@ -243,6 +265,7 @@
       - 반드시 external로 선언
     - 컨트랙트가 KLAY를 받으려면 payable fallback function이 필요
       - payble fallback이 없는 컨트랙트가 KLAY를 전송받으면 오류 발생
+
     ```java
     contract Escrow {
         event Deposited(address sender, uint amount);

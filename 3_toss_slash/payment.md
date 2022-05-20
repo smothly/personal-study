@@ -1,4 +1,4 @@
-API 
+API
 
 accepit-Language에 따라 다양한 언어 제공
 
@@ -22,12 +22,11 @@ mongodb는 hive mongo storage handler 사용
 
 batch centre 라는 걸 따로 만들어서 스케줄링 등록 가능
 
-kafka는 어렵게.. 
+kafka는 어렵게..
 producer는 active active
 consumer는 active standby
 
 ![](2021-05-25-22-29-32.png)
-
 
 toss datahub 사용
 
@@ -44,7 +43,6 @@ impala는 멀티 user기능과 성능으로 주로 쓰임.
 한계점
 ![](2021-05-25-22-34-09.png)
 
-
 간단한건 jenkins
 복잡한건 airflow
 
@@ -56,7 +54,6 @@ impala로 실시간 분석은 힘듬. 당일 데이터는 kudu 사용
 
 세그먼트별 데이터를 볼 수 있음.
 이러한 웹사이트 있으면 진자 좋을듯..
-
 
 ---
 
@@ -71,14 +68,14 @@ dba가 리뷰 거침 - 중요
 ## 디멘젼 테이블 관리
 
 - google spreadsheet로 관리하다 하나의 시스템으로 옮김
--
 
+-
 
 fact는 측정값테이블
 dimension는 who/where/what/why등의 배경정보값이 들어간 테이블
 fact를 볼 수 있는 창이다.
 
-## ODS 설계 
+## ODS 설계
 
 operational data store
 중간가공단계의 데이터
@@ -112,6 +109,7 @@ dq의 타입을 정의하여 개발중에 있음.
 ---
 
 # MySQL HA & DR Topology
+
 ![](2021-05-25-23-41-02.png)
 
 ---
@@ -119,10 +117,10 @@ dq의 타입을 정의하여 개발중에 있음.
 # 데이터 설계 사상
 
 ## 테이블의 통합과 분리
+
 - 테이블을 어떻게 분리할지 통합할지
 - 이론
 ![](2021-05-25-23-56-55.png)
 - 공통분모를 잘 파악해라
-
 
 ## 순한 참조의 활용

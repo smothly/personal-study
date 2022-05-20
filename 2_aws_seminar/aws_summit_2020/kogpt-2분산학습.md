@@ -13,18 +13,24 @@ gpt에서는 분산학습을 더 빨리 했음
 mxnet과 horovod사용하여 분산학습
 
 분산학습을 어떻게 진행했는가?
+
 1. ec2 인스턴스 활용
+
 - nvidia v100 gpu 인스턴스 사용
 - elastic fabric adapter로 네트워크 구성
 - fsx lustre shared storage
 ![](2021-07-28-14-25-22.png)
+
 2. sagemaker
+
 - 위에서 저장소만 s3로 변경
 
 모니터링이 중요
+
 - GPU 사용량 감소 + cpu 사용량 증가 + disk write 운영 증가 => 체크포인트 저장이 너무잦아 코드 변경
 
 튜닝
+
 - gelu
 - bert adm
 

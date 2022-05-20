@@ -3,6 +3,7 @@
 ---
 
 # CH1 Klaytn 합의 알고리즘
+
 - BFT  
   - PoW가 너무 느리기때문에 BFT를 씀. PoS는 돈만내면 누군가가 과반을 차지하기 쉬운구조.
   - PoW로 시작하고 잘 분산되어잇다 판단되면 PoS로 변환하는게 대부분
@@ -16,6 +17,7 @@
 ---
 
 # CH2 블록체인의 상태
+
 - 트랜잭션으로 변화하는 상태 기계(State Machine)
   - 초기값 + 변경 = 최종값
   - 이전블록 최종상태 = 현재블록 초기상태
@@ -26,6 +28,7 @@
 ---
 
 # CH3 트랜잭션
+
 - 어카운트의 종류
   - External: 사용자가 사용하는 어카운트 = **EOA**
   - Contract: **스마트 컨트랙트**를 표현하는 어카운트
@@ -38,7 +41,7 @@
   - Tx는 From(sender)과 to(recipient)가 정해져있음
   - to가 누구냐에 따라 TX의 목적이 세분화
   - Gas: Tx를 처리하는데 발생하는 비용
-  - Sender는 Tx의 처리를 위해 필요한 가스의 총량과 같은 **플랫폼 토큰**을 제공해야함 = Gas Fee 
+  - Sender는 Tx의 처리를 위해 필요한 가스의 총량과 같은 **플랫폼 토큰**을 제공해야함 = Gas Fee
   - 가스비는 블록을 생성한 노드가 수집
   - 가스비(=연산비용)가 높을수록 블록에 참여될 확률이 높음
   - **Klaytn은 가스비를 적어낼 수 없음**. 순서대로 처리
@@ -46,6 +49,7 @@
 ---
 
 # CH4 트랜잭션과 서명
+
 - 플랫폼은 sender가 Tx가 처리되는데 필요한 가스비를 가지고 있는지 확인
 - Tx는 sender의 서명(v, r, s)가 필요
   - 어카운트의 balance를 사용하기 때문에
@@ -57,6 +61,7 @@
 ---
 
 # CH5 블록체인별 트랜잭션
+
 - 트랜잭션 예시
 - ![이더리움 예시](https://miro.medium.com/proxy/1*6x3AKjKsjCaOFncemcWvUg.png)
   - nonce는 account가 몇번째 트랜잭션을 보내는지에 대한 정보. 이걸로 병렬성여부를 판단 가능
@@ -69,6 +74,7 @@
 ---
 
 # CH6 트랜잭션 이동경로
+
 - Transaction Journey
   - ![journey](https://t1.daumcdn.net/thumb/R720x0.fpng/?fname=http://t1.daumcdn.net/brunch/service/user/6sb1/image/lQ18s98IN7RA_V5sjn-CkP0ZJ1c.png)  
   - Alice -> node

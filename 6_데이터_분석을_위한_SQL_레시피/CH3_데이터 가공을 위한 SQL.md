@@ -3,12 +3,15 @@
 ---
 
 ## 5강 하나의 값 조작하기
+
 - 데이터를 가공해야 하는 이유
   - 로그 데이터 같은 경우는 한 줄의 row로 모든 내용이 기록되어 있음
   - 데이터 형식의 불일치 ex) NULL 오류
 
 #### 5-1 코드 값을 레이블로 변경하기
+
 - 코드를 레이블로 변경하는 쿼리
+
 ```SQL
 SELECT
   user_id,
@@ -20,8 +23,10 @@ FROM mst_users;
 ```
 
 #### 5-2 URL에서 요소 추출하기
+
 - bigquery와 hive는 URL관련 함수들을 제공하지만, 다른 DW들은 제공하지 않아 정규표현식으로 사용해야함
 - HOST 추출 쿼리
+
 ```SQL
 SELECT
   substring(referrer from 'https?://([^/]*))' -- psql
@@ -30,7 +35,9 @@ SELECT
   host(referrer) -- Bigquery
 FROM access_log;
 ```
+
 - URL 경로와 GET 매개변수에 있는 특정 키 값을 추출하는 쿼리
+
 ```SQL
 SELECT
   stamp
@@ -56,7 +63,9 @@ FROM access_log;
 ```
 
 #### 5-3 문자열을 배열로 분해하기
+
 - URL 경로를 슬래시로 분할해서 계층을 추출하는 쿼리
+
 ```SQL
 SELECT
   stamp
@@ -82,7 +91,9 @@ FROM access_log;
 ```
 
 #### 5-4 날짜와 타임스탬프 다루기
+
 - 현재 날짜와 타임스탬프 출력하는 쿼리
+
 ```SQL
 SELECT
   -- PostgreSQL, Hive, BigQuery의 경우
@@ -102,7 +113,9 @@ SELECT
   , LOCALTIMESTAMP AS stamp
   ;
 ```
+
 - 문자열을 날짜 자료형, 타임스탬프 자료형으로 변환하는 쿼리
+
 ```SQL
 -- 문자열을 날짜/타임스탬프로 변환
 
@@ -125,7 +138,9 @@ date '2016-01-30' AS dt
 '2016-01-30'::date AS dt
 , '2016-01-30 12:00:00'::timestamp AS stamp
 ```
+
 - **타임스탬프 자료형의 데이터**에서 연, 월, 일 등을 추출하는 쿼리
+
 ```SQL
 SELECT
   stamp
@@ -143,7 +158,9 @@ SELECT
 FROM
   (SELECT CAST('2020-01-16 22:22:00' AS timestamp) AS stamp) AS t
 ```
+
 - **타임스탬프를 나타내는 문자열**에서 연, 월, 일 등을 추출하는 쿼리
+
 ```SQL
 SELECT
   stamp
@@ -171,8 +188,10 @@ FROM
 ```
 
 #### 5-5 결손 값을 디폴트값으로 대치하기
+
 - NULL과 함께하는 연산은 무조건 NULL로 됨
 -구매액에서 할인 쿠폰 값을 제외한 매출 금액을 구하는 쿼리
+
 ```SQL
 SELECT
   purchase_id
@@ -187,9 +206,13 @@ FROM
 ---
 
 ## 6강 여러 개의 값에 대한 조작
+
 - 여러 값을 집약 및 비교하여 다양한 관점에서의 데이터를 바라봄
+
 #### 6-1 문자열 연결하기
+
 -문자열을 연결하는 쿼리
+
 ```SQL
 SELECT
   user_id
@@ -205,8 +228,10 @@ FROM
 ```
 
 #### 6-2 여러 개의 값 비교하기
+
 - 쿼터별 매출액을 비교하기
 - q1, q2 컬럼을 비교하는 쿼리
+
 ```SQL
 SELECT
   year
@@ -230,7 +255,9 @@ FROM
 ORDER BY
   year
 ```
+
 - 연간 최대/최소 4분기 매출을 찾는 쿼리
+
 ```SQL
 SELECT
   year
@@ -245,7 +272,9 @@ FROM
 ORDER BY
   year
 ```
+
 - COALESCE를 사용해 NULL을 0으로 변환하고 4분기 평균 매출을 구하는 쿼리
+
 ```SQL
 SELECT
   year
@@ -255,7 +284,9 @@ FROM
 ORDER BY
   year
 ```
+
 - NULL이 아닌 컬럼만을 사용해서 평균값을 구하는 쿼리
+
 ```SQL
 SELECT
   year
@@ -270,8 +301,10 @@ ORDER BY
 ---
 
 #### 6-3 2개의 값 비율 계산하기
+
 - 광고 통계 정보를 통한 CTR(Click Through Rate) 클릭 노출수 계산
 - 정수 자료형의 데이터를 나누는 쿼리
+
 ```SQL
 SELECT
   dt
@@ -293,7 +326,9 @@ WHERE
 ORDER BY
   dt, ad_id
 ```
+
 - 0으로 나누는 것을 피해 CTR을 계산하는 쿼리
+
 ```SQL
 SELECT
   dt
@@ -318,15 +353,19 @@ ORDER_BY
 ```
 
 #### 6-4 두 값의 거리 계산하기
+
 - 물리적 거리뿐만 아니라 평균점수와 떨어져 있는정도, 매출의 차이 등을 `거리`라는 개념을 사용
 - 일차원 데이터의 절댓값과 제곱 평균 제곱근을 계산하는 쿼리
+
 ```SQL
 SELECT
   ABS(x1 -x2) AS abs
   , sqrt(power(x1 - x2, 2)) AS rms
 FROM location_1d
 ```
+
 - 2차원 테이블에 대해 평균 제곱근(유클리드 거리)을 구하는 쿼리
+
 ```SQL
 SELECT
   sqrt(power(x1 - x2, 2) + power(y1 - y2)) AS dist
@@ -339,7 +378,9 @@ FROM
 ```
 
 #### 6-5 날짜/시간 계산하기
+
 - 미래 또는 과거의 날짜/시간을 계산하는 쿼리
+
 ```SQL
 SELECT
   user_id
@@ -391,6 +432,7 @@ FROM mst_users_with_dates
 ```
 
 - 두 날짜의 차이를 계산하는 쿼리
+
 ```SQL
 SELECT
   user_id
@@ -413,6 +455,7 @@ FROM mst_users_with_dates
 ```
 
 - 사용자의 생년월일로부터 age 함수를 사용해 나이를 계산하는 쿼리
+
 ```SQL
 SELECT
   user_id
@@ -428,6 +471,7 @@ FROM mst_users_with_dates
 
 - 연 부분 차이를 통해 나이를 계산하는 쿼리
   - 단순 연도 계산으로 해당 연이 생년월일을 넘었는지는 파악 못함
+
 ```SQL
 SELECT
   user_id
@@ -448,7 +492,9 @@ SELECT
 FROM mst_users_with_dates
 ;
 ```
+
 - 등록 시점과 현재 시점의 나이를 문자열로 계산하는 쿼리
+
 ```SQL
 SELECT
   user_id
@@ -485,13 +531,17 @@ FROM mst_users_with_dates
 ```
 
 #### 6-6 IP 주소 다루기
+
 - IP주소를 비교하거나 동일한 네트워크인지 비교등에 활용
 - psql inet 데이터 타입을 통한 비교
+
 ```SQL
 SELECT
   CAST('127.0.0.1' AS inet) << CAST('127.0.0.0/8' AS inet) AS is_contained
 ```
+
 - IP 주소에서 4개의 10진수 부분을 추출하는 쿼리
+
 ```SQL
 SELECT
   ip
@@ -520,7 +570,9 @@ FROM
   -- PostgreSQL의 경우 명시적 자료형 변환
   (SELECT CAST('192.168.0.1' AS text) AS ip) AS t
 ```
+
 - IP 주소를 정수 자료형 표기로 변환하는 쿼리
+
 ```SQL
 SELECT
   ip
@@ -551,7 +603,9 @@ FROM
   -- PostgreSQL의 경우 명시적 자료형 변환
   (SELECT CAST('192.168.0.1' AS text) AS ip) AS t
 ```
+
 - IP주소를 0으로 메우기
+
 ```SQL
 SELECT
   ip
@@ -587,11 +641,14 @@ FROM
 ```
 
 ## 7강 하나의 테이블에 대한 조작
+
 - 레코드 하나하나가 아닌 대량의 데이터를 집계하여 전체의 특징을 파악(집약)
 
 #### 7-1 그룹의 특징 잡기
+
 - 상품 평가 테이블
 - 집약 함수를 사용해서 테이블 전체의 특징량을 계산하는 쿼리
+
 ```SQL
 SELECT
   COUNT(*) AS total_count
@@ -603,7 +660,9 @@ FROM
   review
 ;
 ```
+
 - 그루핑한 데이터 특징량 계산
+
 ```SQL
 SELECT
   user_id
@@ -619,9 +678,11 @@ GROUP BY
   user_id
 ;
 ```
+
 - 윈도 함수를 사용해 집약 함수의 결과와 원래 값을 동시에 다루는 쿼리
   - `OVER` 구문에 윈도 함수 지정
   - 매개변수 지정하지 않으면 테이블 전체, `PARTITION BY <컬럼>` 을 지정하면 컬럼 기반으로 그룹화하고 집약함수 지정
+
 ```SQL
 SELECT
   user_id
@@ -636,12 +697,14 @@ FROM
 ```
 
 #### 7-2 그룹 내부의 순서
+
 - SQL은 기본적으로 순서가 없어 순위 작성이나 시간 순서를 다루는 것이 어려웠음
 - 윈도함수가 등장하면서 이 과정이 쉬워짐
   - `RANK`는 같은 순위 허용(1, 2, 2, 4) `DENSE_RANK`는 (1, 2, 2, 3) 처럼 순위를 매김
   - `LAG`는 앞에 있는 행의 값 `LEAD`는 뒤의 있는 행의 값 추출
   - `OVER` 구문 내부에 `ORDER BY` 구문을 사용하여 데이터의 순서를 정의
 - 윈도 함수의 ORDER BY 구문을 사용해 테이블 내부의 순서를 다루는 쿼리
+
 ```SQL
 SELECT
   product_id
@@ -664,9 +727,11 @@ FROM popular_products
 ORDER BY row
 ;
 ```
+
 - `ROWS` 구문은 윈도 프레임 지정
 - `FIRST_VALUE`, `LAST_VALUE`
 - ORDER BY 구문과 집약 함수를 조합해서 계산하는 쿼리
+
 ```SQL
 SELECT
   produt_id
@@ -702,6 +767,7 @@ FROM popular_products
 ORDER BY row
 ;
 ```
+
 - 윈도 프레임 지정
   - 기본은 `ROWS BETWEEN start AND end`
     - `start`와 `end`는 `CURRENT_ROW`, `n PRECENDING`(n행 앞), `n FOLLOWING`(n행 뒤), `UNBOUBDED PRECENDING`(이전 행 전부), `UNBOUBDED FOLLOWING`(이후 행 전부) 등의 키워드를 지정
@@ -709,6 +775,7 @@ ORDER BY row
   - `ORDER BY` 절이 없으면 모든 행
   - `ORDER BY` 절의 default는 첫 행에서 현재 행까지
 - 윈도 프레임 지정별 상품 ID를 집약하는 쿼리
+
 ```SQL
 SELECT
   product_id
@@ -743,7 +810,9 @@ WHERE category='action'
 ORDER BY row
 ;
 ```
+
 - PARTITION BY와 ORDER BY를 조합하여 카테고리들의 순위를 계산하는 쿼리
+
 ```SQL
 SELECT
   category
@@ -768,7 +837,9 @@ FROM popular_products
 ORDER BY category, row
 ;
 ```
+
 - 카테고리들의 순위 상위 2개까지의 상품을 추출하는 쿼리
+
 ```SQL
 SELECT *
 FROM
@@ -787,7 +858,9 @@ WHERE rank <=2
 ORDER BY category, rank
 ;
 ```
+
 - 카테고리별 순위 최상위 상품을 추출하는 쿼리
+
 ```SQL
 SELECT DISTINCT
   category
@@ -800,7 +873,9 @@ FROM popular_products
 ```
 
 #### 7-3 세로 기반 데이터를 가로 기반으로 변환하기
+
 - 행으로 지정된 지표 값을 열로 변환하는 쿼리
+
 ```SQL
 SELECT
   dt
@@ -812,7 +887,9 @@ GROUP BY dt
 ORDER BY dt
 ;
 ```
+
 - 행을 집약해서 쉼표로 구분된 문자열로 변환하기
+
 ```SQL
 SELECT
   purchase_id
@@ -833,8 +910,10 @@ ORDER BY purchase_id
 ```
 
 #### 7-4 가로 기반 데이터를 세로 기반으로 변환하기
+
 - 컬럼으로 표현된 가로 기반 데이터는 데이터의 수가 고정되었다는 특징을 가짐
 - 데이터 수와 같은 수의 일련 번호를 가진 `피벗 테이블`를 만들고 `CROSS JOIN`진행
+
 ```SQL
 SELECT
   q.year
@@ -864,7 +943,9 @@ CROSS JOIN
   UNION ALL SELECT 4 AS idx
   ) AS p
 ```
+
 - 테이블 함수를 사용해 배열을 행으로 전개하는 쿼리
+
 ```SQL
 -- PostgreSQL의 경우 unnest 함수 사용하기
 SELECT unnest(ARRAY['A001', 'A002' 'A003']) AS product_id;
@@ -876,7 +957,9 @@ SELECT * FROM unnest(ARRAY['A001', 'A002', 'A003']) AS product_id;
 -- Hive, SparkSQL의 경우 explode 함수 사용
  SELECT explode(ARRAY('A001', 'A002', 'A003')) AS product_id;
 ```
+
 - 테이블 함수를 사용해 쉼표로 구분된 문자열 데이터를 행으로 전개하는 쿼리
+
 ```SQL
 SELECT
   purshase_id
@@ -892,7 +975,9 @@ CROSS_JOIN unnest(split(product_ids, ',')) AS product_id
 -- Hive, SparkSQL, LATERAL VIEW explode 사용
 LATERAL VIEW explode(split(product_ids, ',')) e AS product_id
 ```
+
 - PostgreSQL에서 쉼표로 구분된 데이터를 행으로 전개하는 쿼리
+
 ```SQL
 SELECT
   purcahse_id
@@ -900,8 +985,10 @@ SELECT
   , regexp_split_to_table(product_ids, ',') AS prodcut_id
 FROM purchase_log;
 ```
+
 - Redshift는 배열 자료형을 제공하지않아 전처리가 더 필요
   - 일련 변호(데이터 최대 수)를 가진 피벗 테이블을 만드는 쿼리
+
   ```SQL
     SELECT *
     FROM (
@@ -911,7 +998,9 @@ FROM purchase_log;
     ) AS pivot
     ;
   ```
+
   - split_part 함수의 사용 예 (n번째 요소 추출)
+
   ```SQL
   SELECT
   split_part('A001,A002,A003', ',', 1) AS part_1
@@ -919,7 +1008,9 @@ FROM purchase_log;
   , split_part('A001,A002,A003', ',', 3) AS part_3
   ;
   ```
+
   - 문자 수의 차이를 사용해 상품 수를 계산하는 쿼리
+
   ```SQL
   SELECT
   purchase_id
@@ -933,7 +1024,9 @@ FROM purchase_log;
     purchase_log
   ;
   ```
+
   - 피벗 테이블을 사용해 문자열을 행으로 전개하는 쿼리
+
   ```SQL
   SELECT
   l.purchase_id
@@ -955,19 +1048,23 @@ FROM purchase_log;
       - char_length(replace(l.product_ids, ',', '')))
   ;
   ```
+
 - SQL을 레코드 단위로 분할해두는 것이 기본이지만 1개의 레코드에 집약시키지 못하는 경우가 있어 데이터를 행으로 변환하는 테크닉을 이용해야 함.
 
 ---
 
 ## 8강 여러 개의 테이블 조작하기
+
 - 정규화된 RDB의 여러개 테이블을 함께 봐야하는 경우
 - 하나의 큰 로그를 다루는 경우
 
 #### 8-1 여러 개의 테이블을 세로로 결합하기
+
 - 두 테이블이 컬럼이 일치해야 함
   - UNION ALL 구문을 사용해 테이블을 세로로 결합하는 쿼리
   - SELECT 구문으로 불피료 컬럼 제거 + Default 값 부여로 컬럼을 일치시킴
   - UNION DISTINCT구문도 있음
+
   ```SQL
   SELECT
     'app1' AS app_name,
@@ -989,9 +1086,11 @@ FROM purchase_log;
   ```
 
 #### 8-2 여러 개의 테이블을 가로로 결합하기
+
 - 가로에 일반적인 결합 방법은 JOIN을 사용하는 것
   - 카테고리 내에서 제일 잘 팔리는 상품 ID 찾는 쿼리
   - ID기준으로 단순 결합한 결과로, 카테고리가 결합하지 못하는 문제와 가격이 중복되어 출력되는 문제
+
   ```SQL
   SELECT
     m.category_id,
@@ -1009,7 +1108,9 @@ FROM purchase_log;
     product_sale_ranking r
     ON m.category_id = r.category_id;
   ```
+
   - 위 쿼리와 차이점은 LEFT JOIN을 통한 카테고리 누락 방지, rank가 1인 상품만 가져옴
+
   ```SQL  
   SELECT
     m.category_id,
@@ -1028,9 +1129,11 @@ FROM purchase_log;
     ON m.category_id = r.category_id
     AND r.ranks = 1;
   ```
+
   - 아래 쿼리는 상관 서브 쿼리를 사용해서 마스터 테이블의 행 수가 변할 걱정이 없어 테이블의 누락과 중복을 회피할 수 있음
   - rank 컬럼이 없어도 order by와 limit으로 처리 가능
-  ```SQL    
+
+  ```SQL
   SELECT
     m.category_id,
     m.name,
@@ -1051,10 +1154,12 @@ FROM purchase_log;
   ```
 
 #### 8-3 조건 플래그를 0과 1로 표현하기
+
 - 마스터 테이블의 속성 조건을 0 또는 1로 표현하기
 - '신용카드 등룍 여부', '구매 이력 여부' 두 가지  조건을 0과 1로 표현
 - `CASE`구문과 `SIGN`함수를 통해 구현 가능
   - 신용 카드 등록과 구매 이력 유무를 0과 1로 플래그로 나타내는 쿼리
+
   ```SQL
   SELECT
     c.user_id
@@ -1075,9 +1180,11 @@ FROM purchase_log;
   ```
 
 #### 8-4 계산한 테이블에 이름 붙여 재사용하기
+
 - 복잡한 서브 쿼리의 중첩보다는 일시적인 테이블(CTE(WITH구문)) 사용
 - 카테고리별 상품 매출 순위
   - 카테고리별 순위를 추가한 테이블에 이름 붙이기
+
   ```SQL
   WITH
   product_sales_ranking AS (
@@ -1092,7 +1199,9 @@ FROM purchase_log;
   SELECT *
   FROM product_sale_ranking
   ```
+
   - 카테고리들의 순위에서 유니크한 순위 목록을 계산하여 횡단적으로 출력
+
   ```SQL
   WITH
   product_sales_ranking AS (
@@ -1139,9 +1248,11 @@ FROM purchase_log;
   ```
 
 #### 8-5 유사 테이블 만들기
+
 - 임의의 레코드를 가진 유사 테이블 만들기
   - 디바이스 ID와 이름의 마스터 테이블을 만드는 쿼리
   - `UNION ALL` 처리가 무거워서 레코드가 많으면 성능 문제가 발생할 수 있음
+
   ```SQL
   WITH
   mst_devices AS (
@@ -1164,7 +1275,9 @@ FROM purchase_log;
     ON u.register_device = d.device_id
   ;
   ```
+
   - VALUES 구문을 사용한 유사테이블 만들기(PostgreSQL)
+
   ```SQL
   WITH
   mst_devices(device_id, device_name) AS (
@@ -1177,8 +1290,10 @@ FROM purchase_log;
   FROM mst_devices
   ;  
   ```
+
   - 배열형 테이블 함수를 사용한 유사 테이블 만들기(Hive, SparkSQL)
     - 아래와 같이모든 데이터를 같은 자료형으로 정의해야함
+
   ```SQL
   WITH
   mst_devices(device_id, device_name) AS (
@@ -1200,7 +1315,9 @@ FROM purchase_log;
   FROM mst_devices
   ;
   ```
+
   - map 자료형과 explode 함수를 사용해 동적으로 테이블을 작성하는 쿼리
+
   ```SQL
   WITH
   mst_devices(device_id, device_name) AS (
@@ -1223,6 +1340,7 @@ FROM purchase_log;
   ;
 - 순번을 사용해 테이블 작성하기
   - 순번을 가진 유사 테이블을 작성하는 쿼리(postgreSQL Bigquery)
+
   ```SQL
   WITH
   series AS (
@@ -1235,7 +1353,9 @@ FROM purchase_log;
   SELECT *
   FROM series
   ```
+
   - repeat 함수를 응용해서 순번을 작성하는 쿼리(Hive, SparkSQL)
+
   ```SQL
   SELECT
     ROW_NUMBER() OVER(ORDER BY x) AS idx

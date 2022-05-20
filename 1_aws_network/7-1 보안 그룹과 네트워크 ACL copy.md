@@ -1,32 +1,33 @@
 # 7-1 보안 그룹과 네트워크
 
 ## 접근 제어
+
 - 보안상 위협으로부터 제반 시설 및 환경을 보호하기 위한 보안 대책
 
 #### 접근 제어 절차
+
 1. 식별
 2. 인증(Authentication)
 3. 권한(Authorization)
+
 - 접근하는 대상에 대한 제어는 보통 IP주소와 프로토콜 포트 번호 등으로 식별한다.
 
 ---
 
 ## 보안 그룹과 네트워크 ACL
+
 - 개요
-    - AWS애서는 트래픽 제어 정책으로 보안그룹과 네트워크 ACL을 사용
-    - 트래픽의 방향성에 따라 인바운드 아웃바운드로 구분
+  - AWS애서는 트래픽 제어 정책으로 보안그룹과 네트워크 ACL을 사용
+  - 트래픽의 방향성에 따라 인바운드 아웃바운드로 구분
 - 보안 그룹과 네트워크 ACL의 차이점
-    - 트래픽 제어 대상
-        - 보안그룹은 인스턴스 레벨에서의 접근 제어 가능
-        - ACL은 서브넷 레벨의 접근 제어
-        - ![ACL+SG](https://blog.kakaocdn.net/dn/rkKfL/btq2noToejm/uUneHU6Ch4r4CP31ZBuSz0/img.png)
-    - Stateful vs Stateless
-        - state의 차이는 이전 상태 정보를 기억하고 있냐의 차이
-        - 보안그룹은 Sstateful 인바운드로 들어온 트래픽을 기억했다가 아웃바운드는 규칙 상관없이 허용
-        - ACL은 Stateless 인바운드와 상관없이 아웃바운드 규칙도 따로 적용
-    - 허용/거부 규칙
-        - 보안그룹은 허용 규칙만 존재
-        - ACL은 허용/거부 규칙 둘 다 존재
-
-
-
+  - 트래픽 제어 대상
+    - 보안그룹은 인스턴스 레벨에서의 접근 제어 가능
+    - ACL은 서브넷 레벨의 접근 제어
+    - ![ACL+SG](https://blog.kakaocdn.net/dn/rkKfL/btq2noToejm/uUneHU6Ch4r4CP31ZBuSz0/img.png)
+  - Stateful vs Stateless
+    - state의 차이는 이전 상태 정보를 기억하고 있냐의 차이
+    - 보안그룹은 Sstateful 인바운드로 들어온 트래픽을 기억했다가 아웃바운드는 규칙 상관없이 허용
+    - ACL은 Stateless 인바운드와 상관없이 아웃바운드 규칙도 따로 적용
+  - 허용/거부 규칙
+    - 보안그룹은 허용 규칙만 존재
+    - ACL은 허용/거부 규칙 둘 다 존재

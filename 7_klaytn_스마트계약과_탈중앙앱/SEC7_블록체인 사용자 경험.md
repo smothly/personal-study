@@ -3,6 +3,7 @@
 ---
 
 # CH1 블록체인 UX의 문제
+
 - 블록체인의 문제
   - 성능
     - 한 블록이 처리할 수 있는 트랜잭션의 개수의 제한
@@ -27,6 +28,7 @@
 ---
 
 # CH2 가스비 개선
+
 - 가스비
   - TX를 처리하는데 필요한 자원을 비용으로 전환한 것이 가스(gas)
     - 플랫폼 사용료
@@ -51,6 +53,7 @@
     - Payer는 Sender가 전달한 트랜잭션에 추가정보를 기입하고 서명 = Sign2
     - 각각의 서명이 sender 주소와 payer 주소에 부합할 경우 트랜잭션이 옳다라고 정의
     - 가스비는 Payer의 밸런스에서 차감(nonce 변경 없음)
+
     ```java
     // Sender-side
     const { rawTransaction: senderRawTransaction } = await caver.klay.accounts.signTransaction({
@@ -66,6 +69,7 @@
         feePayer: payer.address
     }, payer.privateKey);
     ```
+
     - 대납의 장점
       - UX 향상
       - 불필요한 토큰 거래 최소화
@@ -79,6 +83,7 @@
 ---
 
 # CH3 키 관리 개선
+
 - 키관리의 어려움
   - 잃어버리면 복구 불가능
   - 분실 해킹의 위험

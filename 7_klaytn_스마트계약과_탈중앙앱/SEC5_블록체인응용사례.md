@@ -3,6 +3,7 @@
 ---
 
 # CH1 블록체인 응용사례 개요
+
 - Blockchain for businesses
   - supply chain
   - Cross-border settlement
@@ -13,6 +14,7 @@
 ---
 
 # CH2 공급망(Supply Chain) 관리
+
 - Supply Chain Management
   - 부품 제공, 생산, 배포, 고객 까지 이르는 물류의 흐름을 하나의 가치사슬 관점에서 파악
   - 필요한 정보가 원할히 흐르도록 지원하는 시스템
@@ -32,6 +34,7 @@
 ---
 
 # CH3 해외 송금/정산
+
 - 은행을 거친 지급 결제
   - 환거래은행을 거침
   - 복잡 + 고비용 + 즉시성 떨어짐
@@ -51,6 +54,7 @@
 ---
 
 # CH4 지역화폐
+
 - Electronic Medium of Exchange
   - 실물화폐에서 전자화폐로 변화하는 사회
     - 중앙은행, 기업들이 발행 및 원장 관리를 수행 -> 불투명한 운영
@@ -64,6 +68,7 @@
 ---
 
 # CH5 NFT(Non-Fungible Token)
+
 - Unique Electronic Assets
   - 블록체인의 불변성을 사용하여 복제불가능한 디지털 데이터를 생성
     - 기존 데이터(ex, mp3)는 복제 가능.

@@ -3,11 +3,14 @@
 ---
 
 ## 9강 시계열 기반으로 데이터 집계하기
+
 - 시계열로 매출을 집계함녀 규칙성이나, 기간간의 비교 등을 할 수 있음
 
 #### 9-1 날짜별 매출 집계하기
+
 - 가로 축에 날짜, 세로 축에 금액
   - 날짜별 매출과 평균 구매액을 집계하는 쿼리
+
   ```SQL
   SELECT
     dt
@@ -20,9 +23,11 @@
   ```
 
 #### 9-2 이동평균을 사용한 날짜별 추이 보기
+
 - 매출이 상승하는 경향인지 하락하는 경향인지 파악하기 위함
   - 날짜별 매출과 7일 이동평균을 집계하는 쿼리
     - seven_day_avg는 7일간의 데이터가 없으면 현재데이터로 보정이 들어감
+
   ```SQL
   SELECT
   dt
@@ -50,10 +55,12 @@
   ```
   
 #### 9-3 당월 매출 누계 구하기
+
 - 윈도 함수 사용하여 매출의 누계 구하기
   - 날짜별 매출과 당월 누계 매출을 집계하는 쿼리
     - 연월을 기준으로 파티션을 생성해서 이전까지 합을 누계하는 식
     - 가독성을 높일려면 연월일 빼는 함수들을 WITH절로 빼면 됨
+
   ```SQL
   SELECT
     dt
@@ -76,7 +83,9 @@
   ORDER BY dt
   ;
   ```
+
   - 날짜별 매출을 일시 테이블로 만드는 쿼리
+
   ```SQL
   WITH
   daily_purchase AS (
@@ -98,7 +107,9 @@
   FROM daily_uprchase
   ORDER BY dt;
   ```
+
   - daily_purchase 테이블에 대해 당월 누계 매출을 집계하는 쿼리(최종본!!)
+
   ```SQL
   WITH
   daily_purchase AS (
@@ -132,9 +143,11 @@
   ```
 
 #### 9-4 월별 매출의 작대비 구하기
+
 - 작년의 해당 월의 매출과 비교
 - JOIN을 사용하지 않고 작대비를 계산하는 방법 소개
   - 월별 매출과 작대비를 계산하는 쿼리
+
   ```SQL
   WITH
   daily_purchase AS (
@@ -157,6 +170,7 @@
   ```
 
 #### 9-5 Z차트로 업적의 추이 확인하기
+
 - `월차매출` `매출누계` `이동년계` 라는 3개의 지표로 구성하여 계절 변동의 영향을 배제하고 트렌드를 분석하는 방법
   - ![Z차트에 대한 설명](https://online.fliphtml5.com/hkuy/msoq/files/large/52.jpg)
   - Z차트 분석할 때
@@ -167,6 +181,7 @@
       - 오른쪽 위로 올라가면 매출 오름, 내려가면 매출 감소
     - ![Z차트 예시](https://mblogthumb-phinf.pstatic.net/20141127_136/socialmedia_1417097904019q7BqE_PNG/%BD%BA%C5%A9%B8%B0%BC%A6_2014-11-27_%BF%C0%C8%C4_11.18.07.png?type=w2)
   - 2015년 매출에 대한 Z차트를 작성하는 쿼리
+
   ```SQL
   WITH
   daily_purchase AS (
@@ -218,8 +233,10 @@
   ```
 
 #### 9-6 매출을 파악할 때 중요 포인트
+
 - 주변 데이터를 함께 포함해서 리포트를 만드는게 좋음 ex) 판매 횟수, 평균 구매액, 구매 단가 등
   - 매출과 관련된 지표를 집계하는 쿼리
+
   ```SQL
   WITH
   daily_purchase AS (
@@ -272,12 +289,15 @@
 ---
 
 ## 10강 다면적인 축을 사용해 데이터 집약하기
+
 - 매출의 시계열뿐만 아니라 상품의 카테고리, 가격 등을 조합해서 데이터의 특징을 추출해 리포팅
 
 #### 10-1 카테고리별 매출과 소계 계산하기
+
 - 드릴다운 형식으로 출력하기
   - 카테고리별 매출과 소계를 동시에 구하는 쿼리
     - `UNION ALL` 을 사용하는 건 테이블을 여러 번 불러오고 결합하는 비용이 발생하여 좋지 않음
+
   ```SQL
   WITH
   sub_category_amount AS (
@@ -316,9 +336,11 @@
   UNION ALL SELECT category, sub_category, amount FROM total_amount
   ;
   ```
+
   - ROLLUP을 사용해서 카테고리별 매출과 소계를 동시에 구하는 쿼리
     - PostgreSQL, Hive SparkSQL에 성능이 좋음
     - 레코드 집계 키가 NULL이 돼서 COALESCE함수로 'all'로 변환
+
   ```SQL
   SELECT
     COALESCE(category, 'all') AS category
@@ -333,6 +355,7 @@
   ```
 
 #### 10-2 ABC 분석으로 잘 팔리는 상품 판별하기
+
 - ![ABC분석 예시](https://velog.velcdn.com/images%2Fjaytiger%2Fpost%2Fc4163f2b-79d4-4ebb-bdb3-2ddec1ea1e39%2Fabc_chart.png)
 - 재고 관리에서 사용하는 분석 방법
 - 매출 구성을 파악하기에 용이
@@ -342,6 +365,7 @@
   3. 매출 합계를 기반으로 각 데이터가 차지하는 비율 계산과 구성비를 구함
   4. 구성비 누계를 구함
   - 매출 구성비 누계와 ABC 등급을 계산하는 쿼리
+
   ```SQL
   WITH
   monthly_sales AS (
@@ -388,10 +412,12 @@
   ```
 
 #### 10-3 팬 차트로 상품의 매출 증가율 확인하기
+
 - 변화를 백분율로하여 작은 변화도 쉽게 인지하고 상황을 판단할 수 있음
 - ![팬차트 예시](https://velog.velcdn.com/images%2Fjaytiger%2Fpost%2Fcbbe9d74-aa80-4e72-b9c9-6d058dc87da1%2Ffan_chart2.png)
   - 팬 차트 작성 때 필요한 데이터를 구하는 쿼리
     - `FIRST_VALUE` 함수를 사용해서 2014년 1월 매출 기준의 비율을 계산
+
   ```SQL
   WITH
   daily_category_amount AS (
@@ -439,6 +465,7 @@
   ```
 
 #### 10-4 히스토그램으로 구매 가격대 집계하기
+
 - 상품의 가격에 주목해 데이터 분포를 확인할 수 있는 히스토그램 작성 방법
 - ![히스토그램 예시](https://t3.daumcdn.net/thumb/R720x0.fpng/?fname=http://t1.daumcdn.net/brunch/service/user/QI8/image/EKo2Q-ejY7T7-DTX9zIVbGRAh1A.png)
 - 히스토그램 만드는 방법
@@ -447,6 +474,7 @@
   3. 각 계급에 들어가는 데이터 개수를 구한다.
   - 최댓값, 최솟값, 범위를 구하는 쿼리
     - 대부분 히스토그램 작성하는 함수를 표준으로 제공함 ex) psql의 width_bucket함수
+
   ```SQL
   WITH
   stats AS (
@@ -462,8 +490,10 @@
 
   SELECT * FROM stats;
   ```
+
   - 데이터의 계층을 구하는 쿼리
     - 계급 범위를 10으로 지정해 최댓값인 35000이 계급 11로 지정됨
+
   ```SQL
   WITH
   stats AS (
@@ -494,8 +524,10 @@
   ORDER BY amount
   ;
   ```
+
   - 계급 상한 값을 조정한 쿼리
     - 금액의 최댓값 + 1 하여 상한 미만에 속하도록 변경
+
   ```SQL
   WITH
   stats AS (
@@ -520,7 +552,9 @@
   ORDER BY price
   ;
   ```
+
 - 히스토그램을 구하는 쿼리
+
 ```SQL
 WITH
 stats AS (
@@ -545,7 +579,9 @@ GROUP BY
 ORDER BY bucket
 ;
 ```
+
 - 히스토그램의 상한과 하한을 수동으로 조정한 쿼리
+
 ```SQL
 WITH
 stats AS (
@@ -578,5 +614,5 @@ ORDER BY
   bucket
 ;
 ```
-- 히스토그램이 2개의 산으로 나누어진 경우 필터링을 걸어 어떤 부분에서 차이가 있는지 확인하기!
 
+- 히스토그램이 2개의 산으로 나누어진 경우 필터링을 걸어 어떤 부분에서 차이가 있는지 확인하기!
