@@ -3,12 +3,15 @@
 ---
 
 ## 11강 사용자 전체의 특징과 경향 찾기
+
 - 사용자의 속성(나이, 성별, 주소 등)과 행동(구매한 상품, 기능, 사용 빈도 등 )을 조사하여 서비스를 개선
 
-#### 11-1 사용자의 액션 수 집계하기
+### 11-1 사용자의 액션 수 집계하기
+
 - 액션과 관련된 지표 집계하기
   - 액션 Unique User / 액션 수 / 사용률 / 1명당 액션 수
   - 액션 수와 비율을 계산하는 쿼리
+
   ```SQL
   WITH
   stats AS (
@@ -41,6 +44,7 @@
 - 로그인 사용자와 비로그인 사용자를 구분해서 집계하기
   - `user_id`가 없는 경우 비로그인으로 구분
   - 로그인 상태를 판별하는 쿼리
+
   ```SQL
   WITH
   action_log_with_status AS (
@@ -58,8 +62,10 @@
     action_log_with_status
   ;
   ```
+
   - 로그인 상태에 따라 액션 수 등을 따로 집계하는 쿼리
     - 로그인은 user_id all은 session 기반으로 집계하므로 비로그인 사용자가 로그인하면 count가 중복되는 문제가 생김
+
   ```SQL
   WITH
   action_log_with_status AS (
@@ -79,8 +85,10 @@
     action, login_status WITH ROLLUP
   ;
   ```
+
 - 이전에 한 번이라도 로그인 했다면 회원으로 간주
   - 회원 상태를 판별하는 쿼리
+
   ```SQL
   WITH
   action_log_with_status AS (
@@ -109,9 +117,11 @@
     ;
   ```
 
-#### 11-2 연령별 구분 집계하기
+### 11-2 연령별 구분 집계하기
+
 - 사용자 속성을 정의하고 집계하면 다양한 리포트를 만들 수 있음
   - 사용자의 생일을 계산하는 쿼리
+
   ```SQL
   WITH
   -- 생일과 특정 날짜를 정수로 표현한 결과
@@ -145,7 +155,9 @@
     mst_users_with_age
   ;
   ```
+
   - 성별과 연령으로 연령별 구분을 계산하는 쿼리
+
     ```SQL
     WITH
   mst_users_with_int_birth_date AS (
@@ -185,9 +197,11 @@
   ;
   ```
 
-#### 11-3 연령별 구분의 특징 추출하기
+### 11-3 연령별 구분의 특징 추출하기
+
 - 이전 절에서 사용한 연령별 구분을 사용해서 각각 구매한 상품의 카테고리를 집계
   - 연령별 구분과 카테고리를 집계하는 쿼리
+
   ```SQL
   WITH
   mst_users_with_int_birth_date AS (
@@ -216,12 +230,15 @@
     p.category, u.category
   ;
   ```
+
 - 연령과 카테고리를 축별로 바꿔가며 비교해야 좋은 인사이트를 얻을 수 있음.
 
-#### 11-4 사용자의 방문 빈도 계산하기
+### 11-4 사용자의 방문 빈도 계산하기
+
 - 서비스를 한 주 동안 며칠 사용하는 사용자가 몇 명인지 집계
 - 일주일 동안의 사용자 사용 일수와 구성비
   - 한 주에 며칠 사용되었는지를 집계하는 쿼리
+
   ```SQL
   WITH
   action_log_with_dt AS (
@@ -256,7 +273,9 @@
     action_day_count
   ;
   ```
+
   - 구성비와 구성비누계를 계산하는 쿼리
+
   ```SQL
   WITH
   action_day_count_per_user AS (
@@ -286,10 +305,12 @@
   ;
   ```
 
-#### 11-5 벤 다이어그램으로 사용자 액션 집계하기
+### 11-5 벤 다이어그램으로 사용자 액션 집계하기
+
 - 여러 기능의 사용 상황을 조사한 뒤 사용자의 액션 파악
 - purchase, review, favorite 3개의 액션 로그 파악
   - 사용자들의 액션 플래그를 집계하는 쿼리
+
   ```SQL
   WITH
   user_action_flag AS (
@@ -307,8 +328,10 @@
   SELECT *
   FROM user_action_flag;
   ```
+
   - 모든 액션 조합에 대한 사용자 수 계산하기
     - `CUBE` 함수는 psql만 가능
+
   ```SQL
   WITH
   user_action_flag AS (
@@ -332,8 +355,10 @@
     has_purchase, has_review, has_favorite
   ;
   ```
+
   - `CUBE` 구문을 사용하지 않고 표준 SQL 구문만으로 작성한 쿼리
     - `UNION ALL` 을 많이 사용하는 쿼리로 성능이 좋지 않음
+
   ```SQL
   WITH
   user_adction_flag AS (
@@ -387,7 +412,9 @@
     has_purchase, has_review, has_favorite
   ;
   ```
+
   - 유사적으로 NULL을 포함한 레코드를 추가해서 CUBE 구문과 같은 결과를 얻는 쿼리
+
   ```SQL
   WITH
   user_action_flag AS (
@@ -420,9 +447,11 @@
     has_purchase, has_review, has_favorite
   ;
   ```
+
   - 벤 다이어그램을 만들기 위해 데이터를 가공하는 쿼리
     - any / any / any 는 모든 사용자를 뜻함
-    - 
+    -
+
   ```SQL
   WITH
   user_action_flag AS (
@@ -461,7 +490,8 @@
   ;
   ```
 
-#### 11-6 Decile 분석을 사용해 사용자를 10단계 그룹으로 나누기
+### 11-6 Decile 분석을 사용해 사용자를 10단계 그룹으로 나누기
+
 - 데이터를 10단계로 분할해서 중요도를 파악
 - 사용자의 구매 금액에 따라 순위를 구분하고 중요도를 파악하는 리포트
   1. 사용자를 구매 금액이 많은 순으로 정렬
@@ -471,6 +501,7 @@
   5. 상위에서 누적으로 어느 정도의 비율을 차지하는지 구성비뉴계를 집계
   - 구매액이 많은 순서로 사용자 그룹을 10등분하는 쿼리
     - 같은 수로 데이터 그룹을 만들 때는 `NTILE` 윈도 함수 사용
+
   ```SQL
   WITH
   user_purchase_amount AS (
@@ -495,7 +526,9 @@
   SELECT *
   FROM users_with_decile
   ```
+
   - 10분할한 Decile들을 집계하는 쿼리
+
   ```SQL
   WITH
   user_purchase_amount AS (
@@ -521,7 +554,9 @@
     decile_with_purchase_amount
   ;
   ```
+
   - 구매액이 많은 Decile 순서로 구성비와 구성비 누계를 계산하기
+
   ```SQL
   WITH user_purchase_amount AS (
     ...
@@ -541,9 +576,11 @@
   FROM
     decile_with_purchase_amount;
   ```
+
 - Decile 그룹에 따른 속성들을 더 수집해서 활용할 수 있음
 
-#### 11-7 RFM 분석으로 사용자를 3가지 관점의 그룹으로 나누기
+### 11-7 RFM 분석으로 사용자를 3가지 관점의 그룹으로 나누기
+
 - Decile은 검색 기간에 따른 문제가 있음 ex) 휴면 고객
 - RFM은 보다 자세하게 사용자를 그룹으로 나누는 방법
 - RFM 분석의 3가지 지표 집계하기
@@ -551,6 +588,7 @@
   - Frequency 구매 횟수
   - Monetary 구매 금액 합계
   - 사용자별로 RFM을 집계하는 쿼리
+
   ```SQL
   WITH
   purchase_log AS (
@@ -588,6 +626,7 @@
   FROM
     user_rfm
   ```
+
 - RFM 랭크 정의하기
   - 3개의 지표를 5개 그룹으로 125(5 x 5 x 5)개의 그룹으로 사용자를 나눠 파악할 수 있음
   - 단계 정의
@@ -599,6 +638,7 @@
   >2|90일 이내|2회 이상|5만원 이상
   >1|91일 이상|1회|5만원 미만
   - 사용자들의 RFM 랭크를 계산하는 쿼리
+
   ```SQL
   WITH
   user_rfm AS (
@@ -638,7 +678,9 @@
     user_rfm_rank
   ;
   ```
+
   - 각 그룹의 사람 수를 확인하는 쿼리
+
   ```SQL
   WITH
   user_rfm AS (
@@ -679,10 +721,12 @@
   ORDER BY
     rfm_index DESC
   ```
+
 - 1차원으로 사용자 인식하기
   - 125개의 그룹은 관리하기 힘드므로 적게 그룹을 나누어 관리하기
   - 1차원으로 구분하여 13개의 그룹으로 나누어 관리
   - 통합 랭크를 계산하는 쿼리(R+F+M)
+
   ```SQL
   WITH
   user_rfm AS (
@@ -702,7 +746,9 @@
   ORDER BY
     total_rank DESC, r DESC, F DESC, m DESC;
   ```
+
   - 종합 랭크별로 사용자 수를 집계하는 쿼리
+
   ```SQL
   WITH
   user_rfm AS (
@@ -726,16 +772,18 @@
   ORDER BY
     total_rank DESC;
   ```
+
 - 2차원으로 사용자 인식하기
   - R과 F를 사용해 2차원으로 사용해 2차원 사용자 층의 사용자 수를 집계하는 쿼리
   - **R**, **F**를 사용해 집계하는 방법
   >R/F|**20회 이상**|**10회 이상**|**5회 이상**|**2회 이상**|**1회**
   >:-----:|:-----:|:-----:|:-----:|:-----:|:-----:
   >14일 이내|단골| | |신규|신규
-  >28일 이내| |안정|안정| | 
+  >28일 이내| |안정|안정| |
   >60일 이내|단골 이탈 전조|단골 이탈 전조| |신규 이탈 전조|신규 이탈 전조
   >90일 이내| | | |신규 이탈|신규 이탈
   >91일 이상|단골/안정 이탈|단골/안정 이탈|단골/안정 이탈|신규 이탈|신규 이탈
+
   ```SQL
   WITH
   user_rfm AS (
@@ -760,16 +808,20 @@
   ORDER BY
     r_rank DESC;
   ```
+
 - RFM 분석의 각 지표에 따라 사용자의 속성을 정의하고 1, 2, 3 차원으로 표현하는 방법을 살펴봄
 - 서비스 개선, 검토, 사용자에 따른 메일 최적화 등 다영한 용도로 활용할 수 있음
 
 ---
 
 ## 12강 시계열에 따른 사용자 전체의 상태 변화 찾기
+
 - 사용자는 시간이 지남에 따라 사용자의 상태(단골, 휴면 등)이 변화함
 
-#### 12-1 등록 수의 추이와 경향 보기
+### 12-1 등록 수의 추이와 경향 보기
+
 - 날짜별 등록 수의 추이를 집계하는 쿼리
+
   ```SQL
   SELECT
     register_Date
@@ -782,7 +834,9 @@
     register_date
   ;
   ```
+
 - 매달 등록 수와 전월비를 계산하는 쿼리
+
   ```SQL
   WITH
   mst_users_with_year_month AS (
@@ -819,7 +873,9 @@
     year_month
   ;
   ```
+
 - 디바이스들의 등록 수를 집계하는 쿼리
+
   ```SQL
   WITH
   mst_users_with_year_month AS (
@@ -838,7 +894,8 @@
   ;
   ```
 
-#### 12-2 지속률과 정착률 산출하기
+### 12-2 지속률과 정착률 산출하기
+
 - 지속률: 등록일 기준으로 이후 지정일 동안 사용자가 서비스를 얼마나 이용했는지 나타내는 지표
   - 매일 이용하지 않더라도 판정 날짜에 사용하면 지속자로 취급
   - 사용자가 매일 사용했으면 하는 서비스 ex) 뉴스, 사이트, SNS, 게임 등
@@ -849,6 +906,7 @@
   - 날짜별 n일 지속률 추이
   - '로그 최근 일자'와 '사용자별 등록일의 다음날'을 계산하는 쿼리
     - 최신 일자를 넘으면 NULL로 산정
+
   ```SQL
   WITH
   action_log_with_mst_users As (
@@ -882,8 +940,10 @@
   ORDER BY
     register_date
   ```
+
   - 사용자의 액션 플래그를 계산하는 쿼리
     - 지정한 날의 다음날에 액션을 했는지 0과 1로 플래그로 표현
+
   ```SQL
   WITH
   action_log_with_mst_users AS (
@@ -915,8 +975,10 @@
   ORDER BY
     register_date, user_id;
   ```
+
   - 다음날 지속률을 계산하는 쿼리
     - n번째 날짜의 지속률을 구할려면 매번 action_log_with_mst_users에서 날짜를 바꿔줘야 함
+
   ```SQL
   WITH
   action_log_with_mst_users AS (
@@ -936,7 +998,9 @@
     register_date
   ;
   ```
+
   - 지속률 지표를 관리하는 마스터 테이블을 작성하는 쿼리
+
   ```SQL
   WITH
   repeat_interval(index_name, interval_date) AS (
@@ -957,8 +1021,10 @@
   ORDER BY index_name
   ;
   ```
+
   - 지속률을 세로기반으로 집계하는 쿼리
     - 판정 기간의 로그가 존재하지 않는 경우 NULL로 출력
+
   ```SQL
   WITH
   repeat_interval AS (
@@ -1021,10 +1087,12 @@
   ORDER BY
     register_date, index_name
   ```
+
 - 정착률 관련 리포트
   - 매일의 n일 정착률 추이
   - 지속률에서 썻던 interval_date를 begin과 end로 확장해야함
   - 정착률 지표를 관리하는 마스터 테이블을 작성하는 쿼리
+
   ```SQL
   WITH
   repeat_interval(index_name, interval_begin_date, interval_end_date) AS (
@@ -1042,7 +1110,9 @@
   ORDER BY index_name
   ;
   ```
+
   - 정착률을 계산하는 쿼리
+
   ```SQL
   WITH
   repeat_interval AS (
@@ -1114,7 +1184,9 @@
   ORDER BY
     register_date, index_name
   ```
+
   - 지속률 지표를 관리하는 마스터 테이블을 정착률 형식으로 수정한 쿼리
+
   ```SQL
   WITH
   repeat_interval(index_name, interval_begin_date, interval_end_date) AS (
@@ -1137,8 +1209,10 @@
   FROM repeat_interval
   ORDER BY index_name
   ;
-  ``` 
+  ```
+
   - n일 지속률들을 집계하는 쿼리
+
   ```SQL
   WITH
   repeat_interval AS (
@@ -1160,12 +1234,15 @@
   ORDER BY
     index_name
   ```
+
 - 지속률과 정착률은 모두 등록일 기준으로 N일 후의 행동을 집계하는 것으로서, 단기간에 결과를 보고 대책을 세울 수 있는 지표로 활용
 
-#### 12-3 지속과 정착에 영향을 주는 액션 집계하기
+### 12-3 지속과 정착에 영향을 주는 액션 집계하기
+
 - 지속률이나 정착률을 올리기 위한 대책이 필요함
 - 액션에 따른 사용자, 비사용자의 1일 지속률을 비교해야 함
   - 모든 사용자와 액션의 조합을 도출하는 쿼리
+
   ```SQL
   WITH
   repeat_interval(index_name, interval_begin_Date, interval_end_date) AS (
@@ -1200,58 +1277,11 @@
   ORDER BY user_id, action
   ;
   ```
+
   - 사용자의 액션 로그를 0, 1의 플래그로 표현하는 쿼리
     - register_date에 action을 취했고 1일 지속이 됏다면 index_date_action에 1로 표시됨
     - do_action이 0이면 비사용자
-  ```SQL
-  WITH
-  repeat_interval AS (
-    ...
-  )
-  , action_log_with_index_date AS (
-    ...
-  )
-  , user_action_flag AS (
-    ...
-  )
-  , mst_actions AS (
-    ...
-  )
-  , mst_user_actions AS (
-    ...
-  )
-  , register_action_flag AS (
-    SELECT DISTINCT
-      m.user_id
-      , m.register_date
-      , m.action
-      , CASE
-          WHEN a.action IS NOT NULL THEN 1
-          ELSE 0
-        END AS do_action
-      , index_name
-      , index_date_action
-    FROM
-      mst_user_actions AS m
-      LEFT JOIN
-        action_log AS a
-        ON m.user_id = a.user_id
-        AND CAST(m.register_date AS date) = CAST(a.stamp AS date)
-        -- BigQuery, Timestamp 자료형으로 변환한 뒤, 날짜 자료형으로 변환
-        AND CAST(m.regsiter_date AS date) = date(timestamp(a.stamp))
-        AND m.action = a.action
-      LEFT JOIN
-        user_action_flag AS f
-        ON m.user_id = f.user_id
-    WHERE
-      f.index_date_action IS NOT NULL
-  )
-  SELECT *
-  FROM register_action_flag
-  ORDER BY user_id, index_name, action
-  ;
-  ```
-  - 액션에 따른 지속률과 정착률을 집계하는 쿼리
+
   ```SQL
   WITH
   repeat_interval AS (
@@ -1301,9 +1331,62 @@
   ;
   ```
 
-#### 12-4 액션 수에 따른 정착률 집계하기
+  - 액션에 따른 지속률과 정착률을 집계하는 쿼리
+
+  ```SQL
+  WITH
+  repeat_interval AS (
+    ...
+  )
+  , action_log_with_index_date AS (
+    ...
+  )
+  , user_action_flag AS (
+    ...
+  )
+  , mst_actions AS (
+    ...
+  )
+  , mst_user_actions AS (
+    ...
+  )
+  , register_action_flag AS (
+    SELECT DISTINCT
+      m.user_id
+      , m.register_date
+      , m.action
+      , CASE
+          WHEN a.action IS NOT NULL THEN 1
+          ELSE 0
+        END AS do_action
+      , index_name
+      , index_date_action
+    FROM
+      mst_user_actions AS m
+      LEFT JOIN
+        action_log AS a
+        ON m.user_id = a.user_id
+        AND CAST(m.register_date AS date) = CAST(a.stamp AS date)
+        -- BigQuery, Timestamp 자료형으로 변환한 뒤, 날짜 자료형으로 변환
+        AND CAST(m.regsiter_date AS date) = date(timestamp(a.stamp))
+        AND m.action = a.action
+      LEFT JOIN
+        user_action_flag AS f
+        ON m.user_id = f.user_id
+    WHERE
+      f.index_date_action IS NOT NULL
+  )
+  SELECT *
+  FROM register_action_flag
+  ORDER BY user_id, index_name, action
+  ;
+  ```
+
+### 12-4 액션 수에 따른 정착률 집계하기
+
 - 7일 동안에 실행한 액션 수에 따라 14일 정착률이 어떻게 변화하는지 보기
   - 액션의 계급 마스터와 사용자 액션 플래그의 조합을 산출하는 쿼리
+
   ```SQL
   WITH
   repeat_interval(index_name, interval_begin_date, interval_end_date) AS (
@@ -1349,7 +1432,9 @@
   ORDER BY
     user_id, action, min_count
   ```
+
   - 등록 후 7일 동안의 액션 수를 집계하는 쿼리
+
   ```SQL
   WITH
   repeat_interval AS (
@@ -1422,7 +1507,9 @@
     user_id, action, min_count
   ;
   ```
+
   - 등록 후 7일 동안의 액션 횟수별로 14일 정착률을 집계하는 쿼리
+
   ```SQL
   WITH
   repeat_interval AS (
@@ -1459,3 +1546,11 @@
   GROUP BY
     index_name, action, min_count;
   ```
+
+### 12-5 사용 일수에 따른 정착률 집계하기
+
+- 7일 정착기간 동안 사용자가 며칠 사용했는지가 이후 정착률에 어떠한 영향을 주는지
+- 리포트 만드는 법
+  - 등록일 다음날부터 7일 동안의 사용 일수를 집계
+  - 사용 일수별로 집계한 사용자 수의 구성비와 구성비누계를 계산
+  - 사용 일수별로 집계한 사용자 수를 분모로 두고, 28일 정착률을 집계한 뒤 그 비율을 계산
