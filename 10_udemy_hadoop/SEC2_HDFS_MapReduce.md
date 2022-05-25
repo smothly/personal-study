@@ -70,3 +70,86 @@
   hadoop fs -rm ml-100k/u.data # 데이터 삭제
   hadoop fs -rmdir ml-100k # 폴더 삭제
   ```
+
+## MapReduce 정의 및 작동 방식
+
+---
+
+- MapReduce 과정
+  - ![Mapreduce](https://t1.daumcdn.net/cfile/tistory/2136A84B59381A8428)
+- 특징
+  - 클러스터에 데이터를 분배
+  - 데이터를 파티션으로 나눠서 클러스터에 걸쳐 병렬 처리되도록 함
+  - 데이터를 매핑(transformed)하고 리듀싱(aggregate)함
+  - Failover기능 제공
+- 예시
+  - 사용자가 얼마나 많은 영화를 평가했는지 살펴보기
+    - key: 사용자ID
+    - value: 집계할 영화
+    - 핵심은 key가 같은것이 여러개 나올 수 있음. ex) 철수: 토르, 철수: 어벤저스
+    - 순서
+      1. mapper: key:value 쌍의 리스트를 만들어줌
+      2. shuffle sort: key로 묶고 sort해줌
+      3. reducer: 각 키에 값들에 len이라는 연산자로 집계해줌
+
+## MapReduce 분산 처리 방법
+
+---
+- 아키텍처
+  - ![아키텍처](https://i.stack.imgur.com/1NXUp.png)
+- 내부적으로 MR이 어떻게 돌아가는지?
+  - mapper: row를 나누어서 여러 노드에 전달하고 병렬적으로 mapper 처리
+  - suffle and sort
+    - 네트워크에 데이터를 주고보내는 방식이 아님
+    - `merger sort`를 함
+  - reducer: 주어진 key를 병렬적으로 집계합니다
+  - 순서
+    1. client node가 작업을 개시
+    2. yarn 리소스 매니저와 대화하여 MR작업이 필요하다고 함
+    3. HDFS에 데이터를 복사함
+    4. node manager 아래에 있는 Map Reduce Application Master가 작동함
+       - application master는 개별 매핑과 리듀싱 작업을 모니터링함, yarn과 협업해 작업을 클러스터에 배분
+       - node manager는 MR이 동작하는 모든 것을 관리, 개별 PC를 관리
+    5. 살제 작업은 각 node에서 MR작업이 수행되고, 이 때 HDFS와 통신하며 I/O를 진행함
+  - 네트워크 작업을 최소화 하기 위해 MR작업을 최대한 데이터와 가까운 곳에서 실행. 웬만하면 데이터 블록을 가지고 있는 머신
+- 깊게 살펴보기
+  - MR과 Hadoop은 JAVA로 작성됨
+  - STREAMING을 통해 표준 입춥력과 같은 PAI를 제공하여 다른 언어로도 접근 가능함
+  - 실패시 처리 방법
+    - worker가 실패하면? => 같은 노드 or 다른 노드에서 재시작
+    - application master는 yarn이 restart 시켜줌 SPOF가 아님
+    - 전체노드가 다운되면? yarn이 restart 시켜줌
+    - yarn이 다운되면? zookeeper를 사용하여 stnad by yarn을 셋업함
+  - Counter: 클러스터 전반에 걸쳐 공유된 총 수를 유지
+  - Combiner: 매퍼 노드를 줄이고 최적화해서 간접비를 줄임
+- 요즘은 MR을 직접 사용하기 보다는 Hive나 Spark 같은 고수준의 도구로 대체됨
+
+## MapReduce 연습문제
+
+---
+
+- 평점이 몇개씩 있는지 살펴보기
+  - key: 평점
+  - value: 숫자1
+  - map -> shuffle&sort -> reduce 과정은 동일함
+  - python으로 프로그래밍
+  
+    ```python mapper
+    from mrjob.job import MRJob
+    from mrjob.step import MRStep
+    
+    class RatingsBreakdown(MRJob):
+      def steps(self):
+        return [
+          MRStep(mapper=self.mapper_get_ratings, reducer=self.reducer_count_ratings)
+        ]
+      def mapper_get_ratings(self, _, line):
+        (userID, movieID, rating, timestamp) = line.split('\t')
+        yield rating, 1
+
+      def reducer_count_ratings(self, key, values):
+        yield key, sum(values)
+
+    if __name__ == '__main__':
+      RatingsBreakdown.run()
+    ```
