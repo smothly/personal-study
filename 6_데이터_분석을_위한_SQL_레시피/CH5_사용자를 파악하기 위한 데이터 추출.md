@@ -1554,3 +1554,414 @@
   - 등록일 다음날부터 7일 동안의 사용 일수를 집계
   - 사용 일수별로 집계한 사용자 수의 구성비와 구성비누계를 계산
   - 사용 일수별로 집계한 사용자 수를 분모로 두고, 28일 정착률을 집계한 뒤 그 비율을 계산
+- 리포트로 알 수 있는 것
+  - 70% 사용자가 7일 판정 기간에 1일~4일 밖에 사용하지 않음
+  - 5일 동안 사용자의 28일 정착률은 45%
+  - 5일의 이탈자가 많으면 1~6일 보상 6일의 빅이벤트 보상 같은걸로 정착률을 늘릴 수 있음
+- 리포트 SQL
+  - 등록된 다음날부터 7일 동안의 사용 일수를 집계
+  - 사용일수별로 집계한 사용자 수의 구성비와 구성비누계를 계산
+  - 사용 일수별로 집계한 사용자 수를 분모로 두고 28일 정착률을 집계한 뒤 비율을 계산
+  - 등록일 다음날부터 7일 동안의 사용 일수와 28일 정착 플래그를 생성하는 쿼리
+    - 등록일 다음날부터 7일 동안의 사용 일수와 해당 사용자의 28일 정착 플래그 생성
+
+  ```SQL
+  WITH
+  repeat_interval(index_name, interval_begin_date, interval_end_date) AS (
+    -- PostgreSQL은 VALUES로 일시 테이블 생성 가능
+    -- Hive, Redshift, BigQuery, SparkSQL의 경우 SELECT로 대체 가능
+    VALUES ('28 day retention', 22, 28)
+  )
+  , action_log_with_index_date AS (
+    ...
+  )
+  , user_action_flag AS (
+    ...
+  )
+  , register_action_flag AS (
+    SELECT
+      m.user_id
+      , COUNT(DISTINCT CAST(a.stamp AS date)) AS dt_count
+      -- BigQuery의 경우 다음과 같이 사용
+      , COUNT(DISTINCT date(timestamp(a.stamp))) AS dt_count
+      , index_name
+      , index_date_action
+    FROM
+      mst_users AS m
+      LEFT JOIN
+        action_log AS a
+        ON m.user_id = a.user_id
+
+        -- 등록 다음날부터 7일 이내의 액션 로그 결합하기
+        -- PostgreSQL, Redshift의 경우 다음과 같이 사용
+        AND CAST(a.stamp AS date)
+          BETWEEN CAST(m.register_date AS date) + interval '1 day'
+            AND CAST(m.register_date AS date) + interval '8 days'
+        
+        -- BigQuery
+        AND date(timestamp(a.stamp))
+          BETWEEN date_add(CAST(m.register_date AS date), interval 1 day)
+            AND date_add(CAST(m.register_date AS date), interval 8 day)
+
+        -- SparkSQL
+        AND CAST(a.stamp AS date)
+          BETWEEN date_add(CAST(m.register_Date AS date), 1)
+            AND date_add(CAST(m.register_Date AS date), 8)
+        
+        -- Hive, JOIN에 BETWEEN을 사용할 수 없으므로, WHERE 사용
+      LEFT JOIN
+        user_action_flag AS f
+        ON m.user_id = f.user_id
+    WHERE
+      f.index_date_action IS NOT NULL
+    GROUP BY
+      m.user_id
+      , f.index_name
+      , f.index_date_action
+  )
+  SELECT *
+  FROM
+    register_action_flag;
+  ```
+
+  - 사용 일수에 따른 정착율을 집계하는 쿼리
+
+  ```SQL
+  WITH
+  repeat_interval AS (
+    ...
+  )
+  , action_log_with_index_date AS (
+    ...
+  )
+  , user_action_flag AS (
+    ...
+  )
+  , register_action_flag AS (
+    ...
+  )
+  SELECT
+    dt_count AS dates
+    , COUNT(user_id) AS users
+    , 100.0 * COUNT(user_id) / SUM(COUNT(user_id)) OVER() AS user_ratio
+    , 100.0 *
+      SUM(COUNT(user_id))
+        OVER(ORDER BY index_name, dt_count)
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+      / SUM(COUNT(user_id)) OVER() AS cum_ratio
+    , SUM(index_date_action) AS achieve_users
+    , AVG(100.0 * index_date_action) AS achieve_ratio
+  FROM
+    register_action_flag
+  GROUP BY
+    index_name, dt_count
+  ORDER BY
+    index_name, dt_count;
+  ```
+
+  - 사용 일수 말고도 글의 개수나 게임 레벨 등으로 대상을 변경해서 활용도 가능
+
+### 12-6 사용자의 잔존율 집계하기
+
+---
+
+- 서비스를 지속적으로 사용하는 사용자를 파악함으로써 문제발견과 미래 목표를 세울 수 있음
+  - 잔존율이 내려가면? 서비스 장벽이 높은지 확인
+  - 잔존율이 갑자기 내려가면? 사용 목적을 달성하는데 시간이 너무 짧지 않은지 확인
+  - 오래 사용하던 사용자의 잔존율이 내려가면? 서비스 경쟁등으로 지친것인지 확인
+- 잔존율을 월 단위로 집계하려면 12개월짜리의 추가 테이블이 필요함
+  - 12개월 후까지의 월을 도출하기 위한 보조 테이블을 만드는 쿼리
+  
+  ```SQL
+  WITH
+  mst_intervals(interval_month) AS (
+    -- 12개월 동안의 순번 만들기(generate_series 등으로 대체 가능)
+    -- PostgreSQL의 경우 VALUES 구문으로 일시 테이블 생성
+    -- Hive, Redshift, BigQuery, SparkSQL의 경우 SELECT 구문과 UNION ALL로 대체 가능
+    VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10), (11), (12)
+  )
+  SELECT *
+  FROM mst_intervals
+  ;
+  ```
+
+- 월 단위 잔존율 집계
+  - 등록 월에서 12개월 후까지의 잔존율을 집계하는 쿼리
+
+  ```SQL
+  WITH
+  mst_intervals AS (
+    ...
+  )
+  , mst_users_with_index_month AS (
+    -- 사용자 마스터에 등록 월부터 12개월 후까지의 월 추가
+    SELECT
+      u.user_id
+      , u.register_date
+      -- n개월 후의 날짜, 등록일, 등록 월 n개월 후의 월 계산
+      -- PostgreSQL의 경우 다음과 같이 사용
+      , CAST(u.register_date::date + i.interval_month * '1 month'::interval AS date) AS index_date
+      , substring(u.register_date, 1, 7) AS register_month
+      , substring(CAST(
+        u.register_date::date + i.interval_month * '1 month'::interval AS text), 1, 7) AS index_month
+      
+      -- Redshift
+      , dateadd(month, i.interval_month, u.register_date::date) AS index_date
+      , substring(u.register_date, 1, 7) AS register_month
+      , substring(
+        CAST(dateadd(month, i.interval_month, u.regsiter_date::date) AS text), 1, 7) AS index_month
+      
+      -- BigQuery
+      , date_add(date(timestamp(u.register_date)), interval i.interval_month month) AS index_date
+      , substr(u.register_date, 1, 7) AS register_month
+      , substr(CAST(
+        date_add(date(timestamp(u.register_date)), interval i.interval_month month) AS string), 1,7) AS index_month
+      
+      -- Hive, SparkSQL
+      , add_month(u.register_date, i.interval_month) AS index_date
+      , substring(u.register_date, 1, 7) AS register_month
+      , substring(
+        CAST(add_months(u.register_date, i.interval_month) AS string), 1, 7) AS index_month
+    FROM
+      mst_users AS u
+      CROSS JOIN
+        mst_intervals AS i
+  )
+  , action_log_in_month AS (
+    -- 액션 로그의 날짜에서 월 부분만 추출
+    SELECT DISTINCT
+      user_id
+      , substring(stamp, 1, 7) AS action_month
+      -- BigQuery의 경우 substr 사용
+      , substr(stamp, 1, 7) AS action_month
+    FROM
+      action_log
+  )
+  SELECT
+    -- 사용자 마스터와 액션 로그를 결합 후, 월별로 잔존율 집계
+    u.register_month
+    , u.index_month
+    -- action_month가 NULL이 아니라면(액션을 했다면) 사용자 수 집계
+    , SUM(CASE WHEN a.action_month IS NOT NULL THEN 1 ELSE 0 END) AS users
+    , AVG(CASE WHEN a.action_month IS NOT NULL THEN 100.0 ELSE 0.0 END) AS retention_rate
+  FROM
+    mst_users_with_index_month AS u
+    LEFT JOIN
+      action_log_in_month AS a
+      ON u.user_id = a.user_id
+      AND u.index_month = a.action_month
+  GROUP BY
+    u.register_month, u.index_month
+  ORDER BY
+    u.register_month, u.index_month
+  ;
+  ```
+  
+  - 사용자 등록과 지속 사용을 파악하기 용이
+  - 마케팅이나 캠페인등을 함께 기록하여 수치 변화의 원인을 파악하면 좋음
+
+### 12-7 방문 빈도를 기반으로 사용자 속성을 정의하고 집계하기
+
+---
+
+- 서비스 사용자의 방문 빈도를 월 단위로 파악하고, 방문 빈도에 따라 사용자를 분류하고 내역을 집계
+- MAU
+  - Monthly Active Users
+  - 월에 서비스를 사용한 사용자 수
+  - 신규인지 기존인지 몰라 3개로 나누어 분석
+    - 신규 사용자
+    - 리피트 사용자: 이전 달에도 사용했던 사용자
+    - 컴백 사용자: 한동안(2달 전) 사용하지 않았다가 돌아온 사용자
+  - 신규, 리피트, 컴백 사용자 수를 집계하는 쿼리
+  
+  ```SQL
+  WITH
+  monthly_user_action AS (
+    -- 월별 사용자 액션 집약하기
+    SELECT DISTINCT
+      u.user_id
+      -- PostgreSQL
+      , substring(u.register_date, 1, 7) AS register_month
+      , substring(l.stamp, 1, 7) AS action_month
+      , substring(CAST(
+        l.stamp::date - interval '1 month' AS text
+      ), 1, 7) AS action_month_priv
+
+      -- Redshift
+      , substring(u.regsiter_date, 1, 7) AS register_month
+      , substring(l.stamp, 1, 7) As action_month
+      , substring(
+        CAST(dateadd(month, -1, l.stamp::date) AS text), 1, 7
+      ) AS action_month_priv
+
+      -- BigQuery
+      , substr(u.register_date, 1, 7) AS register_month
+      , substr(l.stamp, 1, 7) AS action_month
+      , substr(CAST(
+        date_sub(date(timestamp(l.stamp)), interval 1 month) AS string
+      ), 1, 7) AS action_month_priv
+
+      -- Hive, SparkSQL
+      , substring(u.register_date, 1, 7) AS register_month
+      , substring(l.stamp, 1, 7) AS action_month
+      , substring(
+        CAST(add_month(to_date(l.stamp), -1) AS string), 1, 7
+      ) AS action_month_priv
+    
+    FROM
+      mst_users AS u
+      JOIN
+        action_log AS l
+        ON u.user_id = l.user_id
+  )
+  , monthly_user_with_type AS (
+    -- 월별 사용자 분류 테이블
+    SELECT
+      action_month
+      , user_id
+      , CASE
+          -- 등록 월과 액션월이 일치하면 신규 사용자
+          WHEN register_month = action_month THEN 'new_user'
+          -- 이전 월에 액션이 있다면, 리피트 사용자
+          WHEN action_month_priv = 
+            LAG(action_month)
+
+            OVER(PARTITION BY user_id ORDER BY action_month)
+            -- SparkSQL의 경우 다음과 같이 사용
+            OVER(PARTITION BY user_id ORDER BY action_month ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING)
+            THEN 'repeat_user'
+          -- 이외의 경우에는 컴백 사용자
+          ELSE 'come_back_user'
+        END AS c
+      , action_month_priv
+    FROM
+      monthly_user_action
+  )
+  SELECT
+    action_month
+
+    -- 특정 달의 MAU
+    , COUNT(user_id) AS mau
+    -- new_users / repeat_users / com_back_users
+    , COUNT(CASE WHEN c = 'new_user' THEN 1 END) AS new_users
+    , COUNT(CASE WHEN c = 'repeat_user' THEN 1 END) AS repeat_users
+    , COUNT(CASE WHEN c = 'come_back_user' THEN 1 END) AS come_back_users
+  FROM
+    monthly_user_with_type
+  GROUP BY
+    action_month
+  ORDER BY
+    action_month
+  ;
+  ```
+
+  - 리피트 사용자를 3가지로 분류하기
+    - 신규 리피트 사용자: 이전 달 신규 + 이번 달 사용
+    - 기존 리피트 사용자: 이전 달 리피트 + 이번 달 사용
+    - 컴백 리피트 사용자: 이전 달 컴백 + 이번 달 사용
+  - 리피트 사용자를 세분화해서 집계하는 쿼리
+
+  ```SQL
+  WITH
+  monthly_user_action AS (
+    ...
+  )
+  , monthly_user_with_type AS (
+    ...
+  )
+  , monthly_users AS (
+    SELECT
+      m1.action_month
+      , COUNT(m1.user_id) AS mau
+      , COUNT(CASE WHEN m1.c = 'new_user'   THEN 1 END) AS new_users
+      , COUNT(CASE WHEN m1.c = 'repeat_user'  THEN 1 END) AS repeat_users
+      , COUNT(CASE WHEN m1.c = 'come_back_user' THEN 1 END) AS come_back_users
+      
+      , COUNT(
+        CASE WHEN m1.c = 'repeat_user' AND m0.c = 'new_user' THEN 1 END
+      ) AS new_repeat_users
+      , COUNT(
+        CASE WHEN m1.c = 'repeat_user' AND m0.c = 'repeat_user' THEN 1 END
+      ) AS continuous_repeat_users
+      , COUNT(
+        CASE WHEN m1.c = 'repeat_user' AND m0.c = 'come_back_user' THEN 1 END
+      ) AS come_back_repeat_uesrs
+    FROM
+      -- m1 : 해당 월의 사용자 분류 테이블
+      monthly_user_with_type AS m1
+      LEFT OUTER JOIN
+      -- m0 : 이전 달의 사용자 분류 테이블
+      monthly_user_with_type AS m0
+      ON m1.user_id = m0.user_id
+      AND m1.action_month_priv = m0.action_month
+    GROUP BY
+      m1.action_month
+  ) 
+  SELECT
+    *
+  FROM
+    monthly_users
+  ORDER BY
+    action_month;
+  ```
+
+- MAU 속성별 반복률 계산하기
+  - 위의 구성비 만으로는 리피트 전환, 컴백 캠페인 효과를 측정하기는 어려움
+  - MAU 내역과 MAU 속성들의 반복률을 계산하는 쿼리
+
+  ```SQL
+  WITH
+  monthly_user_action AS (
+    ...
+  )
+  , monthly_user_with_type AS (
+    ...
+  )
+  , monthly_users AS (
+    ...
+  )
+  SELECT
+    action_month
+    , mau
+    , new_users
+    , repeat_users
+    , come_back_users
+    , new_repeat_users
+    , continuous_repeat_users
+    , come_back_repeat_users
+
+    -- PostgreSQL, Redshift, BigQuery
+    -- Hive의 경우 NULLIF를 CASE로 변경
+    -- SparkSQL, LAG 함수의 프레임에 ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING 지정
+    -- 이번 달에 신규 사용자이면서, 해당 월에 신규 리피트 사용자인 사용자의 비율
+    , 100.0 * new_repeat_users
+      / NULLIF(LAG(new_users) OVER(ORDER BY action_month), 0)
+      AS priv_new_repeat_ratio
+    
+    -- 이전 달에 리피트 사용자이면서, 해당 월에 기존 리피트 사용자인 사용자의 비율
+    , 100.0 * continuous_repeat_users
+      / NULLIF(LAG(repeat_users) OVER(ORDER BY action_month), 0)
+      AS priv_continuous_repeat_ratio
+    
+    -- 이전 달에 컴백 사용자이면서, 해당 월에 컴백 리피트 사용자인 사용자의 비율
+    , 100.0 * come_back_repeat_users
+      / NULLIF(LAG(come_back_users) OVER(ORDER BY action_month), 0)
+      AS priv_come_back_repeat_ratio
+    
+  FROM
+    monthly_users
+  ORDER BY
+    action_month
+  ;
+  ```
+
+  - 월 단위 집계로, 1일에 등록한 사용자가 30일 이상 사용하지 않으면 리피트 사용자가 되지 않음.
+  - 판정기간에 문제가 있지만 간단하게 추이를 확인하거나 서비스끼리 비교할 때는 굉장히 유용한 리포트
+  - 판정기간에 신경 쓰이면 독자적인 정의로 집계
+
+
+### 12-8 방문 종류를 기반으로 성장지수 집계하기
+
+---
+
+-
