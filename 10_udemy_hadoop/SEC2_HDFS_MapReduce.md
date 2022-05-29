@@ -153,3 +153,92 @@
     if __name__ == '__main__':
       RatingsBreakdown.run()
     ```
+
+## MapReduce 실습
+
+---
+
+- 2.5버전 기준으로 작성
+- 환경설정
+
+  ```sh
+  su root
+  cd /etc/yum.repos.d
+  cp sandbox.repo /tmp
+  rm sandbox.repo
+  cd ~
+  
+  yum install python-pip
+  # python-pip 설치 안될 시 아래 커맨드 실행
+  echo "https://vault.centos.org/6.10/os/x86_64/" > /var/cache/yum/x86_64/6/base/mirrorlist.txt
+  echo "https://vault.centos.org/6.10/updates/x86_64/" > /var/cache/yum/x86_64/6/updates/mirrorlist.txt
+  echo "https://vault.centos.org/6.10/extras/x86_64/" > /var/cache/yum/x86_64/6/extras/mirrorlist.txt
+  echo "https://vault.centos.org/6.10/sclo/x86_64/rh/" > /var/cache/yum/x86_64/6/centos-sclo-rh/mirrorlist.txt
+  echo "https://vault.centos.org/6.10/sclo/x86_64/sclo" > /var/cache/yum/x86_64/6/centos-sclo-sclo/mirrorlist.txt
+  
+  pip install google-api-python-client==1.6.4
+  # 설치 안될 시 python2.7로 업데이트
+  yum install scl-utils
+  yum install centos-release-scl
+  yum install python27
+  scl enable python27 bash
+  wget https://bootstrap.pypa.io/pip/2.7/get-pip.py
+  python2.7 get-pip.py
+  
+  pip install mrjob==0.5.11
+  
+  yum install vim
+
+  # 데이터랑 스크립트 다운로드
+  wget http://media.sundog-soft.com/hadoop/ml-100k/u.data
+  wget http://media.sundog-soft.com/hadoop/RatingsBreakdown.py  
+  ```
+
+- 실습1
+  - 평점 각 개수 파악하기
+
+  ```sh  
+  python RatingsBreakdown.py u.data
+  # 데이터가 작기 때문에 하나의 클러스터에서 모든걸 작업함.
+  # 실제로는 hdfs와 여러개의 클러스터 사용
+  python RatingsBreakdown.py -r hadoop --hadoop-streaming-jar /usr/hdp/current/hadoop-mapreduce-client/hadoop-streaming.jar u.data
+  ```
+
+- 실습2
+  - 영화의 평점 개수 파악하고 정렬하여 출력하기
+  - 실습1에서 사용했던 코드 수정
+    - 정렬하는 법
+      - 기존 리듀서의 결과를 다시 매퍼의 인풋으로 넣어주기
+      - key를 Movie ID로 바꿔주기
+      - 모든 데이터는 스트링으로 들어오기 때문에 zero padding을 해줌
+
+
+  ```python
+  from mrjob.job import MRJob
+  from mrjob.step import MRStep
+
+  class RatingsBreakdown(MRJob):
+      def steps(self):
+          return [
+              MRStep(mapper=self.mapper_get_ratings,
+                    reducer=self.reducer_count_ratings),
+              MRStep(reducer=self.reducer_sorted_output)
+          ]
+
+      def mapper_get_ratings(self, _, line):
+          (userID, movieID, rating, timestamp) = line.split('\t')
+          yield movieID, 1
+
+      #def reducer_count_ratings(self, key, values):
+      #    yield key, sum(values)      
+      def reducer_count_ratings(self, key, values):
+          yield str(sum(values)).zfill(5), key
+      
+      def reducer_sorted_output(self, count, movies):
+          for movie in movies:
+              yield movie, count
+
+  if __name__ == '__main__':
+      RatingsBreakdown.run()
+  ```
+
