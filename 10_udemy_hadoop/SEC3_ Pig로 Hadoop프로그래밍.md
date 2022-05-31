@@ -57,4 +57,41 @@
 
 - Tez 옵션 클릭해서 실행 => 더 빠름!
 
-## Pig
+## Pig 명령어
+
+---
+
+- Pig Latin 명령어 설명
+  - ![Pig Latin 예시](https://www.wikitechy.com/tutorials/apache-pig/img/apache-pig-images/pig-latin-vs-hiveql.png)
+  - ![Pig Latin sheet](https://intellipaat.com/mediaFiles/2019/03/Pig-Basics-Cheat-Sheet.jpg)
+
+## Pig 실습2
+
+---
+
+- 1점을 가장 많이 받은 영화 찾기
+- 실습2에서 했던거에서 업데이트 하기
+
+  ```SQL
+  ratings = LOAD '/user/maria_dev/ml-100k/u.data' AS (userID:int, movieID:int, rating:int, ratingTime:int);
+
+  metadata = LOAD '/user/maria_dev/ml-100k/u.item' USING PigStorage('|') AS (movieID:int, movieTitle:chararray, releaseDate:chararray, videoRelease:chararray, imdbLink:chararray);
+
+  nameLookup = FOREACH metadata GENERATE movieID, movieTitle;
+
+  groupedRatings = GROUP ratings BY movieID;
+
+  averageRatings = FOREACH groupedRatings GENERATE group AS movieID, AVG(ratings.rating) AS avgRating, COUNT(ratings.rating) AS numRatings;
+
+  badMovies = FILTER averageRatings BY avgRating < 2.0;
+
+  nameBadMovies = JOIN badMovies BY movieID, nameLookup BY movieID;
+
+  finalResults = FOREACH nameBadMovies GENERATE nameLookup::movieTitle AS movieName,
+                        badMovies::avgRating as avgRating,
+                        badMovies::numRatings as numRatings;
+
+  finalResultsSorted = ORDER finalResults By numRatings DESC;
+
+  DUMP finalResultsSorted;
+  ```

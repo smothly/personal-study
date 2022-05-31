@@ -212,7 +212,6 @@
       - key를 Movie ID로 바꿔주기
       - 모든 데이터는 스트링으로 들어오기 때문에 zero padding을 해줌
 
-
   ```python
   from mrjob.job import MRJob
   from mrjob.step import MRStep
