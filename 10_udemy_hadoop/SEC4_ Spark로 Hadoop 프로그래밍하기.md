@@ -1,4 +1,4 @@
-# SEC54 Spark로 Hadoop 프로그래밍 하기
+# SEC4 Spark로 Hadoop 프로그래밍 하기
 
 ## What is Spark?
 
