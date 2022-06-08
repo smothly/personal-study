@@ -82,8 +82,95 @@ FROM ratings
 GROUP BY movieID
 ORDER BY avgRating DESC;
 
-
 SELECT n.title, avgRating
-FROM avgRatings t JOIN names n ON t.movieID = n.movieID;
+FROM avgRatings t JOIN names n ON t.movieID = n.movieID
 WHERE ratingCount > 10;
+```
+
+## MySQL과 Hadoop 통합하기
+
+---
+
+- MySQL
+  - 오픈소스 RDB
+  - OLTP 적합
+  - 모놀리틱함
+  - Hadoop에 import할 수 있음.
+- Sqoop
+  - ![sqoop아키텍처](https://t1.daumcdn.net/cfile/tistory/246A5C3A58479DB10D)
+  - 각 매퍼가 RDB와 HDFS와 통신하며 import/export함
+  - Hive에 직접 테이블 생성도 가능
+  - 특정 column(pk, date 등) 기준으로 incremental import도 가능
+
+## 실습 Saoop을 사용하여 MySQL <-> HDFS/Hive
+
+---
+
+### MySQL 설치 및 영화 데이터 가져오기
+
+- 데이터 삽입 스크리트 다운로드
+
+```shell
+wget http://media.sundog-soft.com/hadoop/movielens.sql
+```
+
+- MySQL 접속 `mysql -u root -p` pw는 hadoop
+- 테이블 생성 + 데이터 import
+
+```sql
+create database movielens;
+
+show databases; -- 확인
+
+set names 'utf8'; -- 인코딩 변경
+set character set utf8;
+use movielens;
+source movielens.sql; -- 데이터 삽입
+
+select * from movies limit 10; -- 확인
+describe ratings;
+
+select movies.title, count(ratings.movie_id) as ratingCount
+from movies
+inner join ratings
+on movies.id = ratings.movie_id
+group by movies.title
+order by ratingCount;
+```
+
+- 현재 데이터는 작기 때문에 로컬에 MySQL설치하는 것이 이득일 수는 있으나, 대용량 데이터일 경우 Hadoop 클러스터의 이점을 가져갈 수 있음
+
+### Sqoop을 사용하여 MySQL에서 HDFS/Hive로 데이터 가져오기
+
+- localhost에 권한부여 `GRANT ALL PRIVILEGES ON movielens.* to ''@'localhost';`
+- sqoop 명령어로 hdfs import 실행
+
+```shell
+sqoop import --connect jdbc:mysql://localhost/movielens --driver com.mysql.jdbc.Driver --table movies -m 1
+```
+
+- sqoop 명령어로 hive import 실행
+- apps > hive > warehouse > movies에 위치함
+
+```shell
+sqoop import --connect jdbc:mysql://localhost/movielens --driver com.mysql.jdbc.Driver --table movies -m 1 --hive-import
+```
+
+### Sqoop을 사용하여 HadoopL에서 MySQL로 데이터 내보내기
+
+- MySQL에 전달받을 테이블 생성
+
+```sql
+create table exported_movies (id INTEGER, title VARCHAR(255), releaseDate DATE);
+```
+
+- sqoop export 명령어
+- delimeter는 기본적으로 ascii 1번으로 되어있음
+
+```shell
+sqoop export --connect jdbc:mysql://localhost/movielens --driver com.mysql.jdbc.Driver -m 1 --table exported_movies --export-dir /apps/hive/warehouse/movies --input-fields-terminated-by '\0001'
+```
+
+```sql
+select * from exported_movies limit 10; -- 확인
 ```
