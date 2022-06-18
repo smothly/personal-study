@@ -1959,9 +1959,564 @@
   - 판정기간에 문제가 있지만 간단하게 추이를 확인하거나 서비스끼리 비교할 때는 굉장히 유용한 리포트
   - 판정기간에 신경 쓰이면 독자적인 정의로 집계
 
-
 ### 12-8 방문 종류를 기반으로 성장지수 집계하기
 
 ---
 
--
+- 사용자의 사용, 리텐션 등을 높이기 위한 팀이 있음. = 그로스 해킹
+- 서비스의 성장을 지표화하거나, 그로스 해킹 팀의 성과를 지표화하는 방법의 하나로 '성장지수'라는 지표를 알아봄
+
+#### 성장지수
+
+- 사용자의 서비스 사용과 관련한 상태 변화를 수치화해서 서비스가 성장하는지 알려주는 지표
+- 1이상이면 성장중 0보다 낮으면 퇴보중
+- 4가지 상태 변화 패턴을 통해 산출함
+  - 성장지수 = Signup + Reactivation - Deactivation - Exit
+    - Signup : 신규 등록하고 사용을 시작
+    - Deactivation : 액티브 유저 -> 비액티브 유저
+    - Reactivation : 비액티브 유저 -> 액티브 유저
+    - Exit : 서비스를 탈퇴하거나 사용 중지
+- `서비스를 쓰게 된 사용자` `떠난 사용자`를 집계해서 수치화한 것
+- 성장지수를 늘리는 2가지 방법
+  - Signup과 Reactivation 높이기
+  - Deactivation 낮추기
+- 성장지수 산출을 위해 사용자 상태를 집계하는 쿼리
+
+``` SQL
+WITH
+unique_action_log AS (
+  -- 같은 날짜 로그를 중복하여 세지 않도록 중복 배제
+  SELECT DISTINCT
+    user_id
+    , substring(stamp, 1, 10) AS action_date
+    -- BigQuery
+    , substr(stamp, 1, 10) AS action_date
+  FROM
+    action_log
+)
+, mst_calendar AS (
+  -- 집계하고 싶은 기간을 캘린더 테이블로 생성
+  -- generate_series 등으로 동적 생성도 가능
+            SELECT '2016-10-01' AS dt
+  UNION ALL SELECT '2016-10-02' AS dt
+  UNION ALL SELECT '2016-10-03' AS dt
+  -- 생략
+  UNION ALL SELECT '2016-11-04' AS dt
+)
+, target_date_with_user AS (
+  -- 사용자 마스터에 캘린더 테이블의 날짜를 target_date로 추가
+  SELECT
+    c.dt AS target_date
+    , u.user_id
+    , u.register_date
+    , u.withdraw_date
+  FROM
+    mst_users AS u
+    CROSS JOIN
+      mst_calendar AS c
+)
+, user_status_log AS (
+  SELECT
+    u.target_date
+    , u.user_id
+    , u.regsiter_date
+    , u.withdraw_date
+    , a.action_date
+    , CASE WHEN u.register_date = a.action_date THEN 1 ELSE 0 END AS is_new
+    , CASE WHEN u.withdraw_date = a.action_date THEN 1 ELSE 0 END AS is_exit
+    , CASE WHEN u.target_date = a.action_date THEN 1 ELSE 0 END AS is_access
+    , LAG(CASE WHEN u.target_date = a.action_date TEHN 1 ELSE 0 END)
+      OVER(
+        PARTITION BY u.user_id
+        ORDER BY u.target_date
+        -- SparkSQL, 다음과 같이 프레임 지정
+        ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING
+      ) AS was_access
+  FROM
+    target_date_With_user AS u
+    LEFT JOIN
+      unique_action_log AS a
+      ON u.user_id = a.user_id
+      AND u.target_date = a.action_date
+  WHERE
+    -- 집계 기간을 등록일 이후로만 필터링
+    u.register_date <= u.target_date
+    -- 탈퇴 날짜가 포함되어 있으면, 집계 기간을 탈퇴 날짜 이전만으로 필터링
+    AND (
+      u.withdraw_date IS NULL
+      OR u.target_date <= u.withdraw_date
+    )
+)
+SELECT
+  target_date
+  , user_id
+  , is_new
+  , is_exit
+  , is_access
+  , was_access
+FROM
+  user_status_log
+;
+```
+
+- 매일의 성장지수를 계산하는 쿼리
+
+```SQL
+WITH
+unique_action_log AS (
+  ...
+)
+, mst_calendar AS (
+  ...
+)
+, target_date_with_user AS (
+  ...
+)
+, user_status_log AS (
+  ...
+)
+, user_growth_index AS (
+  SELECT
+    *
+    , CASE
+      -- 어떤 날짜에 신규 등록 또는 탈퇴한 경우 signup | exit으로 판정
+      WHEN is_new + is_exit = 1 THEN
+        CASE
+          WHEN is_new = 1 THEN 'signup'
+          WHEN is_exit = 1 THEN 'exit'
+        END
+      -- 신규 등록과 탈퇴가 아닌 경우 reactivation 또는 deactivation으로 판정
+      -- 이때 reactivation, deactivation의 정의에 맞지 않는 경우는 NULL
+      WHEN is_new + is_exit = 0 THEN
+        CASE
+          WHEN was_access = 0 AND is_access = 1 THEN 'reactivation'
+          WHEN was_access = 1 AND is_access = 0 THEN 'deactivation'
+        END
+      --어떤 날짜에 신규 등록과 탈퇴를 함께 했다면(is_new + is_exit = 2) NULL로 지정
+      END AS growth_index
+  FROM
+    user_status_log
+)
+SELECT
+  target_date
+  , SUM(CASE growth_index WHEN 'signup'         THEN 1 ELSE 0 END) AS signup
+  , SUM(CASE growth_index WHEN 'reactivation'   THEN 1 ELSE 0 END) AS reactivation
+  , SUM(CASE growth_index WHEN 'deactivation'   THEN -1 ELSE 0 END) AS deactivation
+  , SUM(CASE growth_index WHEN 'exit'           THEN -1 ELSE 0 END) AS exit
+  -- 성장 지수 정의에 맞게 계산
+  , SUM(
+      CASE growth_index
+        WHEN 'signup'       THEN 1
+        WHEN 'reactivation' THEN 1
+        WHEN 'deactivation' THEN -1
+        WHEN 'exit'         THEN -1
+        ELSE 0
+      END
+    ) AS growth_index
+FROM
+  user_growth_index
+GROUP BY
+  target_date
+ORDER BY
+  target_date
+;
+```
+
+- 성장지수의 성장/하락 포인트마다 데이터를 비교해서 서비스를 성장시켜야 함
+
+### 12-9 지표 개선 방법 익히기
+
+---
+
+- 향상 방법
+  1. 높이고 싶은 **지표**를 결정
+  2. 지표에 영향을 많이 줄 것으로 보이는 **행동**을 결정
+  3. 2번의 행동을 기준으로 1번의 지표차이가 나는 부분들을 비교한다.
+
+- 예시
+  - 글의 업로드 댓글수를 늘리고 싶은 경우?
+    - 팔로잉/팔로워/프로필 사진 유무 등
+  - 신규 사용자의 리피트율 개선?
+    - 게시글 개수/팔로잉/7일 이내 사용 일수 등
+  - CVR을 개선하고 싶은 경우
+    - 상세페이지뷰/관심기능 등
+
+## 13강 시계열에 따른 사용자의 개별적인 행동 분석하기
+
+- 액션의 **타이밍**에 중점을 둠
+- 결과에 이르기 까지 어떤 과정과 기간이 걸리는지 보기 위함
+
+### 13-1 사용자의 액션 간격 집계하기
+
+---
+
+- 신청일과 숙박일의 리드 타임을 계산하는 쿼리(같은 레코드)
+
+```sql
+WITH
+reservations(reservation_id, register_date, visit_date, days) As (
+  -- PostgreSQL의 경우 VALUES 구문으로 일시 테이블 생성 가능
+  -- Hive, Redshift, BigQuery, SparkSQL의 경우 UNION ALL로 대체 가능
+  VALUES
+      (1, date '2016-09-01', date '2016-10-01', 3)
+    , (2, date '2016-09-20', date '2016-10-01', 2)
+    , (3, date '2016-09-30', date '2016-11-20', 2)
+    , (4, date '2016-10-01', date '2017-01-03', 2)
+    , (5, date '2016-11-01', date '2016-12-20', 3)
+)
+SELECT
+  reservation_id
+  , register_date
+  , visit_date
+  -- PostgreSQL, Redshift, 날짜끼리 뺄셈 가능
+  , visit_date::date - register_date::date AS lead_time
+  -- BigQuery, date_diff
+  , date_diff(date(timestamp(visit_date)), date(timestamp(register_date)), day) AS lead_time
+  -- Hive, SparkSQL, datediff 함수 사용
+  , datediff(to_date(visit_date), to_date(register_date)) AS lead_time
+FROM
+  reservations
+;
+```
+
+- 각 단계에서의 리드 타임과 토탈 리드 타임을 계산하는 쿼리(다른 테이블)
+
+```sql
+WITH
+requests(user_id, product_id, request_date) AS (
+  -- PostgreSQL의 경우 VALUES로 일시 테이블 생성 가능
+  -- Hive, Redshift, BigQuery, SparkSQL의 경우 UNION ALL로 대체
+  VALUES
+      ('U001', '1', date '2016-09-01')
+    , ('U001', '2', date '2016-09-20')
+    , ('U002', '3', date '2016-09-30')
+    , ('U003', '4', date '2016-10-01')
+    , ('U004', '5', date '2016-01-01')
+)
+, estimates(user_id, product_id, estimate_date) AS (
+  VALUES
+      ('U001', '2', date '2016-09-21')
+    , ('U002', '3', date '2016-10-15')
+    , ('U003', '4', date '2016-09-30')
+    , ('U004', '5', date '2016-12-01')
+)
+, orders(user_id, product_id, order_date) AS (
+  VALUES
+      ('U001', '2', date '2016-10-01')
+    , ('U004', '5', date '2016-12-05')
+)
+SELECT
+  r.user_id
+  , r.product_id
+  -- PostgreSQL, Redshift, 날짜끼리 뺄셈 가능
+  , e.estimate_date::date - r.request_date::date AS estimate_lead_time
+  , o.order_date::date    - e.estimate_date::date AS order_lead_time
+  , o.order_date::date    - r.request_date::date AS total_lead_time
+  -- BigQuery, date_diff
+  , date_diff(date(timestamp(e.estimate_date)), date(timestamp(r.request_date)), day) AS estimate_lead_time
+  , date_diff(date(timestamp(o.order_date)), date(timestamp(e.estimate_date)), day) AS order_lead_time
+  , date_diff(date(timestamp(o.order_date)), date(timestamp(r.request_date)), day) AS total_lead_time
+  -- Hive, SparkSQL, datediff
+  , datediff(to_date(e.estimate_date), to_date(r.request_date)) AS estimate_lead_time
+  , datediff(to_date(o.order_date), to_date(e.estimate_date)) AS order_lead_time
+  , datediff(to_date(o.order_Date), to_date(r.request_date)) AS total_lead_time
+FROM
+  requests AS r
+  LEFT OUTER JOIN
+    estimates AS e
+      ON r.user_id = e.user_id 
+      AND r.product_id = e.product_id
+  LEFT OUTER JOIN
+    orders AS o
+      ON r.user_id = o.user_id
+      AND r.product_id = o.product_id
+;
+```
+
+- 이전 구매일로부터 일수를 계산하는 쿼리(같은 테이블)
+
+```sql
+WITH
+purchase_log(user_id, product_id, purchase_date) AS (
+  -- PostgreSQL, VALUES로 일시 테이블 생성
+  -- Hive, Redshift, BigQuery, SparkSQL의 경우 UNION ALL로 대체
+  VALUES
+      ('U001', '1', '2016-09-01')
+    , ('U001', '2', '2016-09-20')
+    , ('U002', '3', '2016-09-30')
+    , ('U001', '4', '2016-10-01')
+    , ('U002', '5', '2016-11-01')
+)
+SELECT
+  user_id
+  , purchase_date
+  -- PostgreSQL, Redshift, 날짜끼리 뺄셈
+  , purchase_date::date
+    - LAG(purchase_date::date)
+      OVER(
+        PARTITION BY user_id
+        ORDER BY purchase_date
+      ) AS lead_time
+  -- BigQuery, date_diff 함수
+  , date_diff(to_date(purchase_date), 
+      LAG(to_date(purchase_date))
+        OVER(PARTITION BY user_id ORDER BY purchase_date)) AS lead_time
+  -- SparkSQL의 경우 datediff 함수에 LAG 함수의 프레임 지정이 필요
+  , datediff(to_date(purchase_date), 
+      LAG(to_date(purchase_date))
+        OVER(PARTITION BY user_id ORDER BY purchase_date
+          ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING)) AS lead_time
+FROM
+  purchase_log
+;
+```
+
+### 13-2 카트 추가 후에 구매했는지 파악하기
+
+- 카트 탈락의 원인
+  - 상품 구매 절차상 문제
+  - 예상치 못한 비용(배송료, 수수료)
+  - 북마크 기능으로만 이용
+- 카트에 추가된지 48시간 이내에구매되지 않은 상품 = 카트탈락
+- `카트탈락률` = 카트탈락 / 카트에 담긴 상품수
+- 상품들이 카트에 추가된 시각과 구매된 시각을 산출하는 쿼리
+  - `,` 로 구분된 product id를 구분해야함
+  
+  ```sql
+  WITH
+  row_action_log AS (
+    SELECT
+      dt
+      , user_id
+      , action
+      -- 쉼표로 구분된 product_id 리스트 전개하기
+      -- PostgreSQL의 경우 regexp_split_to_table 함수 사용 가능
+      , regexp_split_to_table(products, ',') AS product_id
+      -- Hive, BigQuery, SparkSQL의 경우, FROM 구문으로 전개하고 product_id 추출
+      , product_id
+      , stamp
+    FROM
+      action_log
+      -- BigQuery
+      CROSS JOIN unnest(split(products, ',')) As product_id
+      -- Hive, SparkSQL
+      LATERAL VIEW explode(split(products, ',')) e AS product_id
+
+  , action_time_stats AS (
+    -- 사용자와 상품 조합의 카트 추가 시간과 구매 시간 추출
+    SELECT
+      user_id
+      , product_id
+      , MIN(CASE action WHEN 'add_cart' THEN dt END) AS dt
+      , MIN(CASE action WHEN 'add_cart' THEN stamp END) AS add_cart_time
+      , MIN(CASE action WHEN 'purchase' THEN stamp END) AS purchase_time
+      -- PostgreSQL, timestamp 자료형으로 변환하여 간격을 구한 뒤, EXTRACT(epoc ~)로 초단위 변환
+      , EXTRACT(epoch from
+        MIN(CASE action WHEN 'purchase' THEN stamp::timestamp END)
+        - MIN(CASE action WHEN 'add_cart' THEN stamp::timestamp END))
+      -- BigQuery, unix_seconds 함수로 초 단위 UNIX 시간 추출 후 차이 구하기
+      , MIN(CASE action WHEN 'purchase' THEN unix_seconds(timestamp(stamp)) END)
+        - MIN(CASE action WHEN 'add_cart' THEN unix_seconds(timestamp(stamp)) END)
+      -- Hive, Spark, unix_timestamp 함수로 초 단위 UNIX 시간 추출 후 차이 구하기
+      , MIN(CASE action WHEN 'purchase' THEN unix_timestamp(stamp) END)
+        - MIN(CASE action WHEN 'add_cart' THEN unix_timestamp(stamp) END)
+      AS lead_time
+    FROM
+      row_action_log
+    GROUP BY
+      user_id, product_id
+  )
+  SELECT
+    user_id
+    , product_id
+    , add_cart_time
+    , purchase_time
+    , lead_time
+  FROM
+    action_time_stats
+  ORDER BY
+    user_id, product_id
+  ;
+  ```
+
+- 카트 추가 후 n시간 이내에 구매된 상품 수와 구매율을 집계하는 쿼리
+
+```sql
+WITH
+row_action_log AS (
+  ...
+)
+, action_time_stats AS (
+  ...
+)
+, purchase_lead_time_flag AS (
+  SELECT
+    user_id
+    , product_id
+    , dt
+    , CASE WHEN lead_time <= 1 * 60 * 60 THEN 1 ELSE 0 END AS purchase_1_hour
+    , CASE WHEN lead_time <= 6 * 60 * 60 THEN 1 ELSE 0 END AS purchase_6_hours
+    , CASE WHEN lead_time <= 24 * 60 * 60 THEN 1 ELSE 0 END AS purchase_24_hours
+    , CASE WHEN lead_time <= 48 * 60 * 60 THEN 1 ELSE 0 END AS purchase_48_hours
+    , CASE
+        WHEN lead_time IS NULL OR NOT (lead_time <= 48 * 60 * 60) THEN 1
+        ELSE 0
+      END AS not_purchase
+  FROM action_time_stats
+)
+SELECT
+  dt
+  , COUNT(*) AS add_cart
+  , SUM(purchase_1_hour) AS purhcase_1_hour
+  , AVG(purchase_1_hour) AS purhcase_1_hour_rate
+  , SUM(purchase_6_hours) AS purchase_6_hours
+  , AVG(purchase_6_hours) AS purhcase_6_hours_rate
+  , SUM(purchase_24_hours) AS purchase_24_hours
+  , AVG(purchase_24_hours) AS purchase_24_hours_rate
+  , SUM(purchase_48_hours) AS purchase_48_hours
+  , AVG(purchase_48_hours) AS purchase_48_hours)rate
+FROM
+  purchase_lead_time_flag
+GROUP BY
+  dt
+;
+```
+
+### 13-3 등록으로부터의 매출을 날짜별로 집계하기
+
+- 사용자의 등록으로부터 시간 경과에 따른 매출을 집계해서 광과와 제휴 비용이 적절하게 투자되었는지 판단
+- 사용자 등록을 월별로 집계하고, n일 경과 시점의 1인당 매출 금액을 집계
+- 사용자들의 등록일부터 경과한 일수별 매출을 계산하는 쿼리
+
+```sql
+WITH
+index_intervals(index_name, interval_begin_date, interval_end_date) AS (
+  -- PostgreSQL, VALUES
+  -- Hive, Redshift, BigQuery, SparkSQL, UNION ALL
+  VALUES
+    ('30 day sales amount', 0, 30)
+    , ('45 day sales amount', 0, 45)
+    , ('60 day sales amount', 0, 60)
+)
+, mst_users_with_base_date AS (
+  SELECT
+    user_id
+    -- 기준일로 등록일 사용
+    , register_date AS base_date
+
+    -- 처음 구매한 날을 기준으로 삼고 싶다면, 다음과 같이 사용
+    , first_purchase_date AS base_date
+  FROM
+    mst_users
+)
+, purchase_log_With_index_date AS (
+  SELECT
+    u.user_id
+    , u.base_date
+    -- 액션의 날짜와 로그 전체의 최신 날짜를 날짜 자료형으로 변환
+    , CASE(p.stamp AS date) AS action_date
+    , MAX(CAST(p.stamp AS date)) OVER() AS latest_date
+    , substring(p.stamp, 1, 7) AS month
+    -- BigQuery, 한 번 타임스탬프 자료형으로 변환하고 날짜 자료형으로 변환
+    , date(timestamp(p.stamp)) AS action_date
+    , MAX(date(timestamp(p.stamp))) OVER() AS latest_date
+    , substr(p.stamp, 1, 7) AS month
+
+    , i.index_name
+    -- 지표 대상 기간의 시작일과 종료일 계산
+    -- PostgreSQL
+    , CASE(u.base_date::date + '1 day'::interval * i.interval_begin_date AS date)
+      AS index_begin_date
+    , CASE(u.base_date::date + '1 day'::interval * i.interval_end_date AS date)
+      AS index_end_date
+    -- Redshift
+    , dateadd(day, r.interval_begin_date, u.base_date::date) AS index_begin_date
+    , dateadd(day, r.interval_end_date, u.base_date::date) AS index_end_date
+    -- BigQuery
+    , date_add(CAST(u.base_date AS date), interval r.interval_begin_date day)
+      AS index_begin_date
+    , date_add(CAST(u.base_date AS date), interval r.interval_end_date day)
+      AS index_end_date
+    -- Hive, SparkSQL
+    , date_add(CAST(u.base_date AS date), r.interval_begin_date)
+      AS index_begin_date
+    , date_add(CAST(u.base_date AS date), r.interval_end_date)
+      AS index_end_date
+    , p.amount
+  FROM
+    mst_users_with_base_date AS u
+    LEFT OUTER JOIN
+      action_log AS p
+      ON u.user_id = p.user_id
+      AND p.action = 'purchase'
+    CROSS JOIN
+      index_intervals AS i
+)
+SELECT *
+FROM
+  purchase_log_with_index_date
+;
+```
+
+- 월별 등록자수와 경과일수별 매출을 집계하는 쿼리
+  - 로그 날짜가 포함되어 있는지 아닌지로 구분
+  - 등록 후의 경과일수로 매출 계산
+  - 0과 1의 액션 플래그가 아닌 구매액을 리턴
+  - 분모를 서비스 사용자 수로 넣으면 ARPU, 과금 사용자 수를 넣으면 ARPPU
+
+```sql
+WITH index_intervals(index_name, interval_begin_date, interval_end_date) AS (
+  ...
+)
+, mst_users_with_base_date AS (
+  ...
+)
+, purchase_log_with_index_date AS (
+  ...
+)
+, user_purchase_amount AS (
+  SELECT
+    user_id
+    , month
+    , index_name
+    -- 3. 지표 대상 기간에 구매한 금액을 사용자별로 합계
+    , SUM (
+      -- 1. 지표의 대상 기간의 종료일이 로그의 최신 날짜에 포함되었는지 확인
+      CASE WHEN index_end_date <= latest_date THEN
+        -- 2. 지표의 대상 기간에 구매한 경우에는, 구매 금액, 이외에는 0 지정
+        CASE
+          WHEN action_date BETWEEN index_begin_date AND index_end_date THEN amount ELSE 0
+        END
+      END
+    ) AS index_date_amount
+  FROM
+    purchase_log_with_index_date
+  GROUP BY
+    user_id, month, index_name, index_begin_date, index_end_date
+)
+SELECT
+  month
+  -- 등록자 수 세기
+  -- 다만 지표와 대상 기간의 종료일이 로그의 최신 날짜 이전에 포함되지 않게 조건 걸기
+  , COUNT(index_date_amount) AS users
+  , index_name
+  -- 지표의 대상 기간 동안 구매한 사용자 수
+  , COUNT(CASE WHEN index_date_amount > 0 THEN user_id END) AS purchase_uu
+  -- 지표와 대상 기간 동안의 합계 매출
+  , SUM(index_date_amount) AS total_amount
+  -- 등록자별 평균 매출
+  , AVG(index_date_amount) AS avg_amount
+FROM
+  user_purchase_amount
+GROUP BY
+  month, index_name
+ORDER BY
+  month, index_name
+;
+```
+
+#### LTV(고객 생애 가치)
+
+- Life Time Value
+- CPA(Cost Per acquistion) 고객 획득 가치를 설정/관리할 때 중요한 지표
+- LTV = <연간 거래액> x <수익률> x <지속 연수(체류 기간)>
