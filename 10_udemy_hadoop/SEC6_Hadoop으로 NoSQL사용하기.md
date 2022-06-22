@@ -87,3 +87,125 @@
     USING org.apache.pig.backend.hadoop.hbase.HBaseStorage (
     'userinfo:age,userinfo:gender,userinfo:occupation,userinfo:zip');
     ```
+
+## Cassandra 개요
+
+---
+
+- Distributed NoSQL
+- 마스터 노드가 없고 SPOF가 없음
+- Hbase처럼 트랜잭션 쿼리에 최적화되어 있음
+- CQL이라는 쿼리 언어를 가지고 있음
+- CAP Theorem
+  - 아래 3개중 2개만 보장할 수 있음
+  - 보통 partition-tolerance는 기본으로 가지고, c와 a중 하나를 택하게 된지만 a를 우선시하게 된다.
+  - 그렇기 때문에 조정 가능한 일관성이라고 함
+  - consistency 일관성: 무조건 응답을 받는다
+  - availability 가용성: DB가 항상 작동하고 신뢰할 수 있음
+  - partition-tolerrance 파티션 저항성: 데이터가 쉽게 나눠지고 클러스터에 분산할 수 있음
+  - ![다른 DB와의 비교](https://raw.githubusercontent.com/ippontech/blog-usa/master/images/2016/11/CapTheorem.jpg)
+- 어떻게 일관성대신 가용성을 얻을 수 있을까?
+  - ![카산드라 아키텍처](https://cassandra.apache.org/_/_images/diagrams/apache-cassandra-diagrams-01.jpg)
+  - 마스터 노드가 없는 대신 `가십 프로토콜` `시니처 기술` 을 사용하여 매초마다 서로 간 소통하며 누가 어떤 데이터를 가지고 있고, 복사본을 가지고 있는지 추적함
+  - 노드들은 서로 소통하며 데이터를 복사하고 클러스터를 구성할 때 지정한 중복수준에 따라 백업 보사본을 어떤 노드가 가질지 결정
+  - 각 원은 특정 키의 범위를 가지고 있음
+- Cassandra노드에 replication을 가지도록 하면 한쪽은 데이터 분석 한쪽은 서비스 하면서 사용 가능
+- CQL
+  - 조인 없음
+  - PK기반으로 쿼리가 동작함
+  - 모든 테이블은 `keyspace`에 존재해야함. database같은 것임
+- Spark와 통합
+  - DataFrame으로서 cassandra 테이블을 읽을 수 있음
+  - Spark로 cassandra에 I/O 할 수 있음
+
+## 실습 Cassandra 설치
+
+---
+
+```shell
+yum install scl-utils # python 여러 버전 사용
+yum install centos-release-scl-rh
+
+yum install python27 # python 2.7 설치
+
+scl enable python27 bash # python 버전 전환
+python -V # 버전 확인
+
+cd /etc/yum.repos.d # 카산드라 리소스를 받기 위한 repo 생성
+vi datastax.repo # 아래 내용 입력
+# [datastax]
+# name = DataStax Repo for Apache Cassandra
+# baseurl = http://rpm.datastax.com/community
+# enabled = 1
+# gpgcheck = 9
+
+yum install dsc30 # 카산드라 설치
+
+pip install cqlsh # cql 쓰기 위한 라이브러리 설치
+
+service cassandra start # 카산드라 시작
+
+cqlsh --cqlversion="3.4.0" # cql버전 맞춰서 접속
+```
+
+```sql
+CREATE CERSPACE movielens WITH  replication = {'class': 'SimpleStrategy', 'replication_factor': '1'} AND durable_writes = truel-- 키스페이스 만들기, 실제로는 복제나 지속적 쓰기 설정은 멀티 클러스터에 걸맞게 생성해야함
+USE movielens;
+CREATE TABLE users (user_id int, age int, gender text, occupation text, zip text, PRIMARY KEY (user_id));
+DESCRIBE TABLE users;
+SELECT * FROM users;
+```
+
+## 십습 Spark출력을 Cassandra에 쓰기
+
+---
+
+```shell
+export SPARK_MAJOR_VERSION=2 # dataets를 사용하기 때문에 v2.0을 사용 
+spark-submit --packages datastax:spark-cassandra-connector:2.0.0-M2-s_2.11 CassandraSpark.py
+service cassandra stop
+```
+
+- dataset으로 불러오기만 하면 평소에 Spark 사용하는 것처럼 하면 됨
+ 
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql import Row
+from pyspark.sql import functions
+
+def parseInput(line):
+    fields = line.split('|')
+    return Row(user_id = int(fields[0]), age = int(fields[1]), gender = fields[2], occupation = fields[3], zip = fields[4])
+
+if __name__ == "__main__":
+    # Create a SparkSession
+    spark = SparkSession.builder.appName("CassandraIntegration").config("spark.cassandra.connection.host", "127.0.0.1").getOrCreate()
+
+    # Get the raw data
+    lines = spark.sparkContext.textFile("hdfs:///user/maria_dev/ml-100k/u.user")
+    # Convert it to a RDD of Row objects with (userID, age, gender, occupation, zip)
+    users = lines.map(parseInput)
+    # Convert that to a DataFrame
+    usersDataset = spark.createDataFrame(users)
+
+    # Write it into Cassandra
+    usersDataset.write\
+        .format("org.apache.spark.sql.cassandra")\
+        .mode('append')\
+        .options(table="users", keyspace="movielens")\
+        .save()
+
+    # Read it back from Cassandra into a new Dataframe
+    readUsers = spark.read\
+    .format("org.apache.spark.sql.cassandra")\
+    .options(table="users", keyspace="movielens")\
+    .load()
+
+    readUsers.createOrReplaceTempView("users")
+
+    sqlDF = spark.sql("SELECT * FROM users WHERE age < 20")
+    sqlDF.show()
+
+    # Stop the session
+    spark.stop()
+```
