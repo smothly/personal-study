@@ -156,7 +156,7 @@ DESCRIBE TABLE users;
 SELECT * FROM users;
 ```
 
-## 십습 Spark출력을 Cassandra에 쓰기
+## 실습 Spark출력을 Cassandra에 쓰기
 
 ---
 
@@ -167,7 +167,7 @@ service cassandra stop
 ```
 
 - dataset으로 불러오기만 하면 평소에 Spark 사용하는 것처럼 하면 됨
- 
+
 ```python
 from pyspark.sql import SparkSession
 from pyspark.sql import Row
@@ -208,4 +208,135 @@ if __name__ == "__main__":
 
     # Stop the session
     spark.stop()
+```
+
+- 카산드라는 일관성보단 가용성이 필요한 어플리케이션에 좋은 선택
+- 데이터가 즉각적으로 전파되지 않아도 되는 데이터에 유용
+
+## MongoDB 개요
+
+---
+
+- 문서 기반의 데이터 모델
+- CAP 이론에 따르면 가용성보단 일관성을 중요시함
+  - ![다른 DB와의 비교](https://raw.githubusercontent.com/ippontech/blog-usa/master/images/2016/11/CapTheorem.jpg)
+- 단일 마스터 노드와 통신하며, 마스터 노드가 다운되면 다운타임(읽을수는 있지만 쓸 수는 없음)이 생김
+- 스키마를 사용하지 않는 특성
+  - 스키마를 강제할 수는 있지만 필수는 아님
+  - 각 document가 스키마가 다를 수 있음
+  - 자동으로 ID를 만들어 PK 처럼 활용. 원하는 필드로 index를 만들 수도 있고 샤딩할 수도 있음
+  - 유연하게 저장할 수 있지만 어떻게 활용할 지 고민하고 저장해야 함
+  - ![document 예시](https://mblogthumb-phinf.pstatic.net/MjAxODA2MThfMTg4/MDAxNTI5MzI5NzAzODI5.o74rpsjh3OatVI19l7knPJ_cI_V0GeASO0tgRPv1SGQg.6aI9aDyyXR6tqE-pu4d3vWTnxqGNInNscvY0DeBY7uMg.PNG.ijoos/image.png?type=w800)
+- 구성 단위
+  - Databases
+  - Collections
+  - Documents
+- Replication Sets
+  - 단일 마스터 아키텍처, 일관성을 우선시
+  - primary가 다운되면 secondary중 하나가 대신함
+  - 복제할 때 가장 빨리 복구할 수 있는 secondary를 택함. 물론 특정 노드 선택도 가능
+  - 짝수의 서버를 가질 수 없음. primary를 설정할 때 과반수의 동의가 필요하기 때문
+    - 결정권자 노드를 선택할 수는 있음
+    - 하나의 mongo db 인스턴스를 사용하기 위해서 적어도 3개의 서버를 가져야 함
+  - 레플리카 셋은 내구성만을 다룸
+  - delayed seconday를 다뤄 사람의 실수로 다운됐을 때 보험으로서 복구를 할 수 있음
+- Sharding
+  - 다수의 레플리카 세트를 가지고, 각 레플리카 세트는 색인화된 일정 범위를 가짐
+  - ![샤딩](https://webimages.mongodb.com/_com_assets/cms/kyc0ez5ijz9zx9iwz-image2.png?auto=format%252Ccompress)
+  - `index`는 레플리카간의 정보의 양을 균형있게 하고, 시스템에 부하도 분산시킴
+  - `mongos`라는 프로세스를 실행하며 각 서버의 collection들과 통신함.
+  - `mongos`는 밸런서의 역할도 수행함. (index의 역할과도 비슷)
+  - 시간이 지남에 따라 auto-sharding을 함
+  - 효과적인 sharding을 위해서는 `cardinality`가 높은 필드를 선택하는게 좋음
+- 장점
+  - 매우 유연하여 대부분 형태의 데이터 저장 가능
+  - js interpreter 지원
+  - 여러 index 지원(여러개는 비추천, 텍스트, 좌표기반 검색 가능)
+  - 내재된 집계기능으로 MR실행이나 GridFS라는 고유의 파일 시스템도 가짐(like HDFS)
+  - Spark등 Hadoop과 통합할 수 있음
+  - SQL connector를 사용할 수는 있으나 Join 및 Normalize 불가능
+
+## 실습 MongoDB 설치 및 데이터 가져오기
+
+- ambari + mongo connector 다운로드
+
+```shell
+su root
+cd /var/lib/ambari-server/resources/stacks/HDP/2.5/services
+git clone https://github.com/nikunjness/mongo-ambari.git # mongo-ambari connector 가져오기
+sudo service ambari restart
+```
+
+- ambari 들어가서 service에서 mongodb 설치 및 시작
+- python script에서 Spark로 mongo 사용하기 위해 라이브러리 설치
+
+```shell
+pip install pymongo
+```
+
+```shell
+export SPARK_MAJOR_VERSION=2 # dataets를 사용하기 때문에 v2.0을 사용 
+spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.11:2.0.0 MongoSpark.py
+```
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql import Row
+from pyspark.sql import functions
+
+def parseInput(line):
+    fields = line.split('|')
+    return Row(user_id = int(fields[0]), age = int(fields[1]), gender = fields[2], occupation = fields[3], zip = fields[4])
+
+if __name__ == "__main__":
+    # Create a SparkSession
+    spark = SparkSession.builder.appName("MongoDBIntergrationIntegration").getOrCreate()
+
+    # Get the raw data
+    lines = spark.sparkContext.textFile("hdfs:///user/maria_dev/ml-100k/u.user")
+    # Convert it to a RDD of Row objects with (userID, age, gender, occupation, zip)
+    users = lines.map(parseInput)
+    # Convert that to a DataFrame
+    usersDataset = spark.createDataFrame(users)
+
+    # Write it into Cassandra
+    usersDataset.write\
+        .format("com.mongodb.spark.sql.DefaultSource")\
+        .options("uri","mongodb://127.0.0.1/movielens.users")\
+        .mode('append')\
+        .save()
+
+    # Read it back from Cassandra into a new Dataframe
+    readUsers = spark.read\
+    .format("com.mongodb.spark.sql.DefaultSource")\
+    .options("uri","mongodb://127.0.0.1/movielens.users")\
+    .load()
+
+    readUsers.createOrReplaceTempView("users")
+
+    sqlDF = spark.sql("SELECT * FROM users WHERE age < 20")
+    sqlDF.show()
+
+    # Stop the session
+    spark.stop()
+```
+
+## 실습 mongo shell 활용하기
+
+---
+
+- 몽고쉘 활용하기
+- 
+```sql
+use movielens
+db.users.find({user_id: 100})
+db.users.explain().find( {user_id: 100} ) -- 쿼리가 어떤걸 하는지 설명해줌
+db.users.createindex({user_id: 1}) -- 매번 검색하기 때문에 index를 생성. IXSCAN으로 변경됨
+db.users.aggregate( [
+  {$group: {_id: {occupation: "$occupation"}, avgAge: { $avg: "$age"}}
+]) -- 각 직업별 평균 연령
+db.users.count()
+db.getCollectionInfos()
+db.users.drop()
+exit
 ```
