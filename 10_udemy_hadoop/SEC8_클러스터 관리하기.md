@@ -248,3 +248,80 @@ oozie job --oozie http://localhsot:11000/oozie -config /home/maria_dev/job.prope
 - 데이터를 대화형으로 사용할 수 있음
 - 노트처럼 포매팅하여 이쁘게 보일 수 있음
 - 다양한 인터프리터들이 있음 ex) hive, spark, python, tajo, cassandra 등
+
+## 실습1 Zeppelin 영화 평점 분석하기
+
+---
+
+- http://127.0.0.1:9995 접속
+- 노트북 생성
+- 마크다운 작성(%md)
+- 쉘 명령어 실행(%sh)
+
+```bash
+%sh
+wget http://media.sundog-soft.com/hadoop/ml-100k/u.data -O /tmp/u.data
+wget http://media.sundog-soft.com/hadoop/ml-100k/u.item -O /tmp/u.item
+
+hadoop fs -rm -r -f /tmp/ml-100k
+hadoop fs -mkdir /tmp/ml-100k
+hadoop fs -put /tmp/u.data /tmp/ml-100k/
+hadoop fs -put /tmp/u.item /tmp/ml-100k/
+```
+
+- 스파크(scala)
+```scala
+final case class Rating(movieID: Int, rating: Int)
+
+var lines = sc.textFile("hdfs:///tmp/ml-100k/u.data").map(x=>{var fields = x.split("\t"); Rating(fields(1).toInt, fields(2).toInt)})
+
+import sqlContext.implicits._
+val ratingDF = lines.toDF()
+ratingDF.printSchema()
+
+val topMovieIDs = ratingDF.groupBy("movieID").count().orderBy(desc("count")).cache()
+topMovieIDs.show()
+```
+
+## 실습 2 Zeppelin 영화 평점 분석하기2
+
+---
+
+```sql
+ratingDF.registerTempTable("ratings")
+
+%sql
+select * from ratings limit 10
+select rating, count(*) from ratings group by rating -- 시각화도 가능
+
+final case class Movie(movieID: Int, title: String)
+
+val lines = sc.textFile("hdfs:///tmp/ml-100k/u.item").map(x => {var fields = x.split('|'); Movie(fields(0).toInt, fields(1))})
+
+import sqlContext.implicits._
+val movieDF = lines.toDF()
+movieDF.show()
+
+movieDF.registerTempTable("title")
+
+%sql
+select t.title, count(*) cnt from ratings r join title t on r.movieID = t.movieID group by t.title order by cnt desc limit 10
+```
+
+- json 파일을 통한 노트북 import/export 가능
+
+## Hue
+
+---
+
+- hadoop user experience
+- ambari+zeppelin 같은 것
+- cloudera에서 사용하고 오픈소스
+- UI를 통해 spark 인터페이스, SQL 등을 할 수 있음
+
+## 기타
+
+---
+
+- Ganglia: hadoop 모니터링 시스템 => Grafana로 대체됨
+- Chukwa: hadoop의 로그를 수집하고 분석 => flume, kafka로 대체 됨
