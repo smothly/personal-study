@@ -34,3 +34,6 @@
 9. 최신 데이터 인프라 이해하기
    - [유튜브 링크](https://www.youtube.com/playlist?list=PLL-_zEJctPoJ92HmbGxFv1Pv_ugsggGD2)
    - 최신 데이터 인프라에 대한 overview 정도의 내용
+10. Udemy Hadoop
+   - [udemy 링크](https://www.udemy.com/course/best-hadoop/)
+   - Hadoop ecosystem에 대한 전반적인 이해에 도움을 줌. 하지만 너무 얕음.
