@@ -161,3 +161,87 @@ if __name__ == "__main__":
     ssc.start()
     ssc.awaitTermination()
 ```
+
+## Apache storm
+
+---
+
+- storm은 개별 이벤트를 처리함
+- 용어
+  - ![스톰 용어](https://t1.daumcdn.net/cfile/tistory/252B8E3454C4517E21)
+  - stream: tuple(그룹지어진 데이터)들이 흐르는 개념
+  - spout: 소스와 연결하는 곳
+  - bolt: 실제 데이터를 처리
+  - 위의 요소들을 원하는 대로 조합할 수 있음. 조합된 걸 토폴로지라고 함
+- 스톰 아키텍처
+  - ![스톰 아키텍처](https://phoenixnap.com/kb/wp-content/uploads/2022/05/apache-storm-architecture.png)
+  - nimbus: job tracker, SPOF이지만 요즘은 고가용성이 보장됨
+  - zookeeper: 고가용성
+  - supervisor: 작업자와 작업 프로세스를 실행하는 주체
+- java로 개발됐지만, bolt에서 다른 언어 사용 가능
+- 2개의 API 제공L storm core(low) at least once / trident(high) exactly once
+- spark streaming과의 차이점
+  - realtime이라면 storm. spark streaming은 마이크로 배치
+  - spark streaming은 mllib이나 graphx와 통합할 수 있음
+  - tumbling window는 이벤트가 겹칠 수가 없음 sliding window는 가능
+  - kafka+storm은 자주 사용
+
+## 실습 storm으로 단어 세기
+
+---
+
+- 구성할 기능
+  - spout: 랜덤 문장 생성기
+  - bolt: 단어 분리
+  - bolt: 각 단어 카운트
+- ambari 들어가서 storm 켜기
+```bash
+cd /usr/hdp/current/storm-client
+cd contrib/storm-starter/src/jvm/org/apache/storm/starter
+vim WordCountTopology.java # 예시 코드 보기
+
+storm jar /usr/hdp/current/storm-client/contrib/storm-starter/storm-starter-topologies-*.jar org.apache.storm.starter.WordCountTopology wordcount 
+
+cd /usr/hdp/current/storm-client/logs/workers-artifacts/wordcount-4-/6700
+tail -f worker.log
+```
+- ambari ui에서 topology결과 모니터링
+
+## Flink 
+
+---
+
+- 스트리밍의 이벤트별로 작업
+- 독립적인 클러스터에서 실행 가능하여 확장성이 큼
+- Fault-tolerant: exactly-once, state snapshot
+- 차이점
+  - storm보다 빠름
+  - high-level api 제공
+  - scale와 친화적
+  - spark처럼 본인만의 에코시스템을 가짐
+  - 데이터를 반은 순간이 아닌 이벤트 시간을 기준으로 처리할 수 있음(유연한 윈도 시스템)
+- 플링크 아키텍처
+  - ![플링크 아키텍처](https://www.researchgate.net/profile/Mehmet-Aktas-7/publication/329621212/figure/fig4/AS:812521086795787@1570731531478/Apache-Flink-Architecture.jpg)
+  - spark처럼 독자적인 에코시스템을 가짐
+
+## 실습 Flink로 단어 세기
+
+---
+
+- flink.apache.org 들어가서 설치
+
+```bash
+wget 주소
+tar -xvf
+cd flink-1.2.0/conf
+vi flink-conf.yaml # 포트 8081 -> 8082로 수정
+```
+
+- example 실행
+
+```bash
+./bin/flink run examples/streaming/SocketWindowWordCount.jar --port 9000
+nc -l 9000 # tcp 포트 9000에 전달. 터미널에 문장 입
+cd log # log 확인
+./bin/stop-local.sh
+```
