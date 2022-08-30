@@ -560,7 +560,7 @@ GROUP BY path
 
 ```sql
 WITH
-, activity_log_with_conversion_flag AS (
+activity_log_with_conversion_flag AS (
   SELECT
     session
     , stamp
@@ -606,4 +606,402 @@ GROUP BY path
 ### 15-4 페이지 가치 산출하기
 
 - 성과를 수치화하기
-  - 
+  - 성과를 `구매`, `의뢰 신청` 등으로 설정
+- 페이지 가치를 할당하는 5가지 방법
+  - 마지막 페이지
+  - 첫 페이지
+  - 방문한 모든 페이지에 균등하게 분산
+  - 마지막 페이지에 가까울 수록 가중치 부여
+  - 첫 페이지에 가까울 수록 가중치 부여
+- 페이지 가치 할당을 계산하는 쿼리
+
+```sql
+WITH
+activity_log_with_session_conversion_flag AS (
+  -- CODE.15.6.
+)
+, activity_log_with_conversion_assign AS (
+  SELECT
+    session
+    , stamp
+    , path
+    -- 성과에 이르기까지 접근 로그를 오름차순 정렬
+    , ROW_NUMBER() OVER(PARTITION BY session ORDER BY stamp ASC) AS asc_order
+    -- 성과에 이르기까지 접근 로그를 내림차순으로 순번
+    , ROW_NUMBER() OVER(PARTITION BY session ORDER BY stamp DESC) AS desc_order
+    -- 성과에 이르기까지 접근 수 세기
+    , COUNT(1) OVER(PARTITION BY session) AS page_count
+
+    -- 1. 성과에 이르기까지 접근 로그에 균등한 가치 부여
+    , 1000.0 / COUNT(1) OVER(PARTITION BY session) AS fair_assign
+
+    -- 2. 성과에 이르기까지 접근 로그의 첫 페이지 가치 부여
+    , CASE
+        WITH ROW_NUMBER() OVER(PARTITION BY session ORDER BY stamp ASC) = 1
+          THEN 1000.0
+        ELSE 0.0
+      END AS first_assign
+    
+    -- 3. 성과에 이르기까지 접근 로그의 마지막 페이지 가치 부여
+    , CASE
+        WHEN ROW_NUMBER() OVER(PARTITION BY session ORDER BY stamp DESC) = 1
+          THEN 1000.0
+        ELSE 0.0
+      END AS last_assign
+    
+    -- 4. 성과에 이르기까지 접근 로그의 성과 지점에서 가까운 페이지 높은 가치 부여
+    , 1000.0
+        * ROW_NUMBER() OVER(PARTITION BY session ORDER BY stamp ASC)
+        -- 순번 합계로 나누기( N*(N+1)/2 )
+        / ( COUNT(1) OVER(PARTITION BY session)
+            * (COUNT(1) OVER(PARTITION BY session) + 1) / 2)
+      AS decrease_assign
+
+    -- 5. 성과에 이르기까지의 접근 로그의 성과 지점에서 먼 페이지에 높은 가치 부여
+    , 1000.0
+        * ROW_NUMBER() OVER(PARTITION BY session ORDER BY stamp DESC)
+        -- 순번 합계로 나누기( N*(N+1)/2 )
+        / ( COUNT(1) OVER(PARTITION BY session) 
+            * (COUNT(1) OVER(PARTITION BY session) + 1) / 2)
+      AS increase_assign
+  FROM activity_log_with_conversion_flag
+  WHERE
+    -- conversion으로 이어지는 세션 로그만 추출
+    has_conversion = 1
+    -- 입력, 확인, 완료 페이지 제외하기
+    AND path NOT IN ('/input', '/confirm', '/complete')
+)
+SELECT
+  session
+  , asc_order
+  , path
+  , fair_assign AS fair_a
+  , first_assign AS first_a
+  , last_assign AS last_a
+  , decrease_assign AS dec_a
+  , increase_assign AS inc_a
+FROM
+  activity_log_with_conversion_assign
+ORDER BY
+  session, asc_order;
+``` 
+
+- 경로별 페이지 가치 합계를 구하는 쿼리
+```sql
+WITH
+activity_log_with_session_conversion_flag AS (
+  -- CODE.15.6.
+)
+, activity_log_with_conversion_assign AS (
+  -- CODE.15.8.
+)
+, page_total_values AS (
+  -- 페이지 가치 합계 계산
+  SELECT
+    path
+    , SUM(fair_assign) AS fair_assign
+    , SUM(first_assign) AS first_assign
+    , SUM(last_assign) AS last_assign
+  FROM
+    activity_log_with_conversion_assign
+  GROUP BY
+    path
+)
+SELECT * FROM page_total_values;
+```
+
+- 경로들의 평균 페이지 가치를 구하는 쿼리
+
+```sql
+WITH
+activity_log_with_session_conversion_flag AS (
+  -- CODE.15.6.
+)
+, activity_log_with_conversion_assign AS (
+  -- CODE.15.8
+), page_total_values AS (
+  -- CODE.15.9
+)
+, page_total_cnt AS (
+  -- 페이지 뷰 계산
+  SELECT
+    path
+    , COUNT(1) AS access_cnt -- 페이지 뷰
+    -- 방문 횟수로 나누고 싶은 경우, 다음과 같은 코드 작성
+    , COUNT(DISTINCT session) AS access_cnt
+  FROM
+    activity_log
+  GROUP BY
+    path
+)
+SELECT
+  -- 한 번의 방문에 따른 페이지 가치 계산
+  s.path
+  , s.access_cnt
+  , v.sum_fair / s.access_cnt AS avg_fair
+  , v.sum_first / s.access_cnt AS avg_first
+  , v.sum_last / s.access_cnt AS avg_last
+  , v.sum_dec / s.access_cnt AS avg_dec
+  , v.sum_inc / s.access_cnt AS avg_inc
+FROM
+  page_total_cnt AS s
+JOIN
+  page_total_values As v
+  ON s.path = v.path
+ORDER BY
+  s.access_cnt DESC;
+```
+
+### 15-5 검색 조건들의 사용자 행동 가시화 하기
+
+- 검색 조건을 상사헤가 할수록 성과로 이어지는 비율이 높음
+  - CTR: 검색 조건을 활용해서 **상세 페이지**로 이동한 비율
+  - CVR: 상세 페이지 조회 후에 **성과**로 이어지는 비율
+- URL 매개변수를 통해서 방문 횟수, CTR, CVR 등을 집계
+- 클릭 플래그와 컨버전 플래그를 계산하는 쿼리
+
+```sql
+WITH
+activity_log_with_session_click_conversion_flag AS (
+  SELECT
+    session
+    , stamp
+    , path
+    , search_type
+    -- 상세 페이지 이전 접근에 플래그 추가
+    , SIGN(SUM(CASE WHEN path = '/detail' THEN 1 ELSE 0 END)
+                OVER(PARTITION BY session ORDER BY stamp DESC
+                  ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW))
+      AS has_session_click
+    -- 성과를 발생시키는 페이지의 이전 접근에 플래그 추가
+    , SIGN(SUM(CASE WHEN path='/complete' THEN 1 ELSE 0 END)
+                OVER(PARTITION BY session ORDER BY stamp DESC
+                  ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW))
+      AS has_session_conversion
+  FROM activity_log
+)
+SELECT
+  session
+  , stamp
+  , path
+  , search_type
+  , has_session_click AS click
+  , has_session_conversion AS cnv
+FROM
+  activity_log_with_session_click_conversion_flag
+ORDER BY
+  session, stamp
+;
+```
+
+- 검색 타입별 CTR,CVR을 집계하는 쿼리
+
+```sql
+WITH
+activity_log_with_session_click_conversion_flag AS (
+  -- CODE.15.11
+)
+SELECT
+  search_type
+  , COUNT(1) AS count
+  , SUM(has_session_click) AS detail
+  , AVG(has_session_click) AS ctr
+  , SUM(CASE WHEN has_session_click = 1 THEN has_session_conversion END) AS conversion
+  , AVG(CASE WHEN has_session_click = 1 THEN has_session_conversion END) AS cvr
+FROM
+  activity_log_with_session_click_conversion_flag
+WHERE
+  -- 검색 로그만 추출
+  path = '/search_list'
+-- 검색 조건으로 집약
+GROUP BY
+  search_type
+ORDER BY
+  count DESC
+;
+```
+
+- 위의 쿼리로는 여러 개의 검색이 모두 카운트 됨
+- `LAG` 함수를 이용하여 클릭 플래그를 직전 페이지에 한정하는 쿼리
+
+```sql
+WITH
+activity_log_with_session_click_conversion_flag AS (
+  SELECT
+    session
+    , stamp
+    , path
+    , search_type
+    -- 상세 페이지의 직전 접근에 플래그 추가
+    , CASE
+        WHEN LAG(path) OVER(PARTITION BY session ORDER BY stamp DESC) = '/detail'
+          THEN 1
+        ELSE 0
+      END AS has_session_click
+    -- 성과가 발생하는 페이지의 이전 접근에 플래그 추가
+    , SIGN(
+      SUM(CASE WHEN path ='/complete' THEN 1 ELSE 0 END)
+        OVER(PARTITION BY session ORDER BY stamp DESC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+      ) AS has_session_conversion
+  FROM
+    activity_log
+)
+SELECT
+  session
+  , stamp
+  , path
+  , search_type
+  , has_session_click AS click
+  , has_session_conversion AS cnv
+FROM
+  activity_log_with_session_click_conversion_flag
+ORDER BY
+  session, stamp
+;
+```
+
+### 15-6 폴아웃 리포트를 사용해 사용자 회유를 가시화하기
+
+- 사용자 흐름 중 어디에서 이탈이 많은지, 이동이 이루어지는지를 파악해서 CVR을 향상시킬 수 있음
+  - 폴스루(Fall Through): 어떤 지점으로 옮겨감
+  - 폴아웃(Fall Out): 어떤 지점에서 이탈
+- 폴아웃 단계 순서를 접근 로그와 결합하는 쿼리
+
+```sql
+WITH
+mst_fallout_step AS (
+  -- 폴아웃 단계와 경로의 마스터 테이블
+            SELECT 1 AS step, '/' AS path
+  UNION ALL SELECT 2 AS step, '/search_list' AS path
+  UNION ALL SELECT 3 AS step, '/detail' AS path
+  UNION ALL SELECT 4 AS step, '/input' AS path
+  UNION ALL SELECT 5 AS step, '/complete' AS path
+)
+, activity_log_with_fallout_step AS (
+  SELECT
+    l.session
+    , m.step
+    , m.path
+    -- 첫 접근과 마지막 접근 시간 구하기
+    , MAX(l.stamp) AS max_stamp
+    , MIN(l.stamp) AS min_stamp
+  FROM
+    mst_fallout_step AS m
+    JOIN
+      activity_log As l
+      ON m.path = l.path
+  GROUP BY
+    -- 세션별로 단계 순서와 경로를 사용해 집약
+    l.session, m.step, m.path
+)
+, activity_log_with_mod_fallout_step AS (
+  SELECT
+    session
+    , step
+    , path
+    , max_stamp
+    -- 직전 단계에서의 첫 접근 시간 구하기
+    , LAG(min_stamp)
+        OVER(PARTITION BY session ORDER BY step)
+        -- sparkSQL의 경우 LAG 함수에 프레임 지정 필요
+        OVER(PARTITION BY session ORDER BY step
+          ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING)
+      AS lag_min_stamp
+    -- 세션에서의 단계 순서 최소값 구하기
+    , MIN(step) OVER(PARTITION BY session) AS min_step
+    -- 해당 단계 도달할때까지 걸린 단계 수 누계
+    , COUNT(1)
+      OVER(PARTITION BY session ORDER BY step
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+      AS cum_count
+  FROM
+    activity_log_with_fallout_step
+)
+SELECT
+  *
+FROM
+  activity_log_with_mod_fallout_step
+ORDER BY
+  session, step
+;
+```
+
+- 폴아웃 리포트에 필요한 로그를 압축하는 쿼리
+  - session에 step=1인 URL(최상위 페이지)이 있으면 폴아웃 리포트 대상에서 제외
+  - step=2 페이지(/search_list) 스킵 + step=3 페이지(/detail)에 직접 접근한 로그 등을 제외
+  - step = 3 페이지에 접근한 후에 step=2로 돌아갈경우 제외
+
+```sql
+WITH
+mst_fallout_step AS (
+  -- CODE.15.14
+)
+, activity_log_with_fallout_step AS (
+  -- CODE.15.14
+)
+, activity_log_with_mod_fallout_step AS (
+  -- CODE.15.14
+)
+, fallout_log AS (
+  -- 폴아웃 리포트에 사용할 로그만 추출
+  SELECT
+    session
+    , step
+    , path
+  FROM
+    activity_log_with_mod_fallout_step
+  WHERE
+    -- 세션에서 단계 순서가 1인지 확인하기
+    min_step = 1
+    -- 현재 단계 순서가 해당 단계의 도달할 떄까지 누계 단계 수와 같은지 확인
+    AND step = cum_count
+    -- 직전 단계의 첫 접근 시간이 NULL 또는 현재 시간의 최종 접근 시간보다 이전인지 확인
+    AND (lag_min_stamp IS NULL OR max_stamp >= lag_min_stamp)
+)
+SELECT
+  *
+FROM
+  fallout_log
+ORDER BY
+  session, step
+;
+```
+
+- 폴아웃 리포트를 출력하는 쿼리
+  - 스텝 순서와 URL로 집약하고 접근수와 페이지 이동률을 집계
+
+```sql
+WITH
+mst_fallout_step AS (
+  -- CODE.15.4
+)
+, activity_log_with_fallout_step AS (
+  -- CODE.15.4
+)
+, fallout_log AS(
+  -- CODE.15.5
+)
+SELECT
+  step
+  , path
+  , COUNT(1) AS count
+  -- 단계 순서 = 1 URL부터의 이동률
+  , 100.0 * COUNT(1)
+    / FIRST_VALUE(COUNT(1))
+      OVER(ORDER BY step ASC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+    AS first_trans_rate
+  -- 직전 단계까지의 이동률
+  , 100.0 * COUNT(1)
+    / LAG(COUNT(1)) OVER(ORDER BY step ASC)
+    -- sparkSQL의 경우 LAG함수에 프레임 지정 필요
+    / LAG(COUNT(1)) OVER(ORDER BY step ASC ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING)
+    AS step_trans_rate
+FROM
+  fallout_log
+GROUP BY
+  step, path
+ORDER BY
+  step
+;
+```
