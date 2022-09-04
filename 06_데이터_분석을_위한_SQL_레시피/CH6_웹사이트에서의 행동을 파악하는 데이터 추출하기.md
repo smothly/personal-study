@@ -1241,3 +1241,191 @@ ORDER BY
 ### 15-9 사용자 행동 전체를 시각화하기
 
 - 한눈에 볼 수 있도록 조감도를 작성하여 서비스 개선 포인트를 잡아보기
+
+## 16강 입력 양식 최적화하기
+
+---
+
+- 자료 청구, 구매 양식 등 폼을 통해 사용자가 
+- EFO = Entry Form Optimization을 진행해야 함
+  - 필수 입력과 선택 입력 명확히 구분 후 필수 항목 상단에 위치시킴
+  - 오류 발생 빈도 줄이기
+  - 쉽게 입력할 수 있도록 항목 줄이거나 자동완성기능 추가
+  - 이탈할 만한 요소 제거
+
+### 16-1 오류율 집계하기
+
+- 확인 화면에서의 오류율을 집계하는 쿼리
+  - 오류율이 높으면 오류 통지 방법에 문제가 있을 가능성이 높음
+
+```sql
+SELECT
+  COUNT(*) AS confirm_count
+  , SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) AS error_count
+  , AVG(CASE WHEN status='error' THEN 1.0 ELSE 0.0 END) AS error_rate
+  , SUM(CASE WHEN status='error' THEN 1.0 ELSE 0.0 END) / COUNT(DISTINCT session) AS error_per_user
+FROM form_log
+WHERE
+  -- 확인 화면 페이지 판정
+  path = '/regist/confirm'
+;
+```
+
+### 16-2 입력-확인-완료까지의 이동률 집계하기
+
+- 입력 양식의 폴아웃 리포트
+
+```sql
+WITH
+mst_fallout_step AS (
+  -- /regist 입력 양식의 폴아웃 단계와 경로 마스터
+            SELECT 1 AS step, '/regist/input'     AS path
+  UNION ALL SELECT 2 AS step, '/regist/confirm'   AS path
+  UNION ALL SELECT 3 AS step, '/regist/complete'  AS path
+)
+, form_log_with_fallout_step AS (
+  SELECT
+    l.session
+    , m.step
+    , m.path
+    -- 특정 단계 경로의 처음/마지막 접근 시간 구하기
+    , MAX(l.stamp) AS max_stamp
+    , MIN(l.stamp) AS min_stamp
+  FROM
+    mst_fallout_step AS m
+    JOIN
+      form_log AS l
+      ON m.path = l.path
+  -- 확인 화면의 상태가 오류인 것만 추출하기
+  WHERE status = ''
+  -- 세션별로 단계 순서와 경로 집약하기
+  GROUP BY l.session, m.step, m.path
+)
+, form_log_with_mod_fallout_step AS (
+  SELECT
+    session
+    , step
+    , path
+    , max_stamp
+    -- 직전 단계 경로의 첫 접근 시간
+    , LAG(min_stamp)
+        OVER(PARTITION BY session ORDER BY step)
+        -- sparkSQL의 경우 LAG 함수에 프레임 지정 필요
+        OVER(PARTITION BY session ORDER BY step
+          ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING)
+      AS lag_min_stamp
+    -- 세션 내부에서 단계 순서 최솟값
+    , MIN(step) OVER(PARTITION BY session) AS min_Step
+    -- 해당 단계에 도달할 때까지의 누계 단계 수
+    , COUNT(1)
+      OVER(PARTITION BY session ORDER BY step
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW)
+      AS cum_count
+  FROM form_log_with_fallout_step
+)
+, fallout_log AS (
+  -- 폴아웃 리포트에 필요한 정보 추출하기
+  SELECT
+    session
+    , step
+    , path
+  FROM
+    form_log_with_mod_fallout_step
+  WHERE
+    -- 세션 내부에서 단계 순서가 1인 URL에 접근하는 경우
+    min_step = 1
+    -- 현재 단계 순서가 해당 단계에 도착할 때까지의 누계 단계 수와 같은 경우
+    AND step = cum_count
+    -- 직전 단계의 첫 접근 시간이 NULL 또는 현재 단계의 최종 접근 시간보다 앞인 경우
+    AND (lag_min_stemp IS NULL OR max_stamp >= lag_min_stamp)
+)
+SELECT
+  step
+  , path
+  , COUNT(1) AS count
+  -- '단계 순서 = 1'인 URL로부터의 이동률
+  , 100.0 * COUNT(1)
+    / FIRST_VALUE(COUNT(1))
+      OVER(ORDER BY step ASC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+    AS first_trans_rate
+  -- 직전 단계로부터의 이동률
+  , 100.0 * COUNT(1)
+    / LAG(COUNT(1)) OVER(ORDER BY step ASC)
+    -- sparkSQL의 경우 LAG 함수에 프레임 지정 필요
+    / LAG(COUNT(1)) OVER(ORDER BY step ASC ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING)
+    AS step_trans_rate
+FROM
+  fallout_log
+GROUP BY
+  step, path
+ORDER BY
+  step
+;  
+```
+
+### 16-3 입력 양식 직귀율 계산하기
+
+- 직귀율이 높다면, 입력 폼의 문제가 있거나 입력을 남발하는 인상을 줄 가능성이 높음
+- 입력 양식 직귀율을 계산하는 쿼리
+  - 세션 별로 
+
+```sql
+WITH
+form_with_progress_flag AS (
+  SELECT
+    -- PostgreSQL, Hive, Redshift, SparkSQL의 경우 substring으로 날짜 부분 추출
+    substring(stamp, 1, 10) AS dt
+    -- PostgreSQL, Hive, BigQuery, SparkSQL의 경우 substr 사용
+    substr(stamp, 1, 10) AS dt
+    
+    , session
+    -- 입력 화면으로부터의 방문 플래그 계산
+    , SIGN(
+        SUM(CASE WHEN path IN ('/regist/input') THEN 1 ELSE 0 END)
+    ) AS has_input
+    -- 입력 확인 화면 또는 완료 화면으로의 방문 플래그 계산하기
+    , SIGN(
+      SUM(CASE WHEN path IN('/regsit/confirm', '/regist/complete') THEN 1 ELSE 0 END)
+    ) AS has_progress
+  FROM form_log
+  GROUP BY
+    -- PostgreSQL, Redshift, BigQuery의 경우
+    -- SELECT 구문에서 정의한 별칭을 GROUP BY에 지정할 수 있음
+    dt, session
+    -- PostgreSQL, Hive, Redshift, SparkSQL의 경우
+    -- SELECT 구문에서 별칭을 지정하기 이전의 식을 GROUP BY에 지정할 수 있음
+    substring(stamp, 1, 10), session
+)
+SELECT
+  dt
+  , COUNT(1) AS input_count
+  , SUM(CASE WHEN has_progress = 0 THEN 1 ELSE 0 END) AS bounce_count
+  , 100.0 * AVG(CASE WHEN has_progrss = 0 THEN 1 ELSE 0 END) AS bounce_rate
+FROM
+  form_with_progress_flag
+WHERE
+  -- 입력 화면에 방문했던 세션만 추출하기
+  has_input = 1
+GROUP BY
+  dt
+;
+```
+
+### 16-4 오류가 발생하는 항목과 내용 집계하기
+
+- 각 입력 양식의 오류 발생 장소와 원인을 집계하는 쿼리
+
+```sql
+SELECT
+  form
+  , field
+  , error_type
+  , COUNT(1) AS count
+  , 100.0 * COUNT(1) / SUM(COUNT(1)) OVER(PARTITION BY form) AS share
+FROM
+  form_error_log
+GROUP BY
+  form, field, error_type
+ORDER BY
+  form, count DESC
+```
