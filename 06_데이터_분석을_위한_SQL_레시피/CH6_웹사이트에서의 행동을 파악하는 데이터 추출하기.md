@@ -1005,3 +1005,239 @@ ORDER BY
   step
 ;
 ```
+
+
+---
+
+- 사용자 흐름 그래프 추출
+  - 사용자가 제공자가 의도한 대로 서비스를 사용하는지 파악 가능
+- 시작지점으로 삼을 페이지를 결정해야 함
+  - 최상위 페이지에서 어떤 식으로 유도
+    - 검색 사용 여부
+    - 서비스 소개 페이지 보는지
+  - 상세 화면 전후에서 어떤 행동을 하는가 
+    - 추천 사용 여부
+    - 검색 결과에서 상세페이지 가는지
+    - 상세 화면 후 장바구니를 담는지
+    - 상세 화면 후 다른 상품 상세 화면으로 이동하는지
+- /detail 페이지 이후의 사용자 흐름을 집계하는 쿼리
+
+```sql
+WITH
+activity_log_with_lead_path AS (
+  SELECT
+    session
+    , stamp
+    , path AS path0
+    -- 곧바로 접근한 경로 추출하기
+    , LEAD(path, 1) OVER(PARTITION BY session ORDER BY stamp ASC) AS path1
+    -- 이어서 접근한 경로 추출하기
+    , LEAD(path, 2) OVER(PARTITION BY session ORDER BY stamp ASC) AS path2
+  FROM
+    activity_log
+)
+, raw_user_flow AS (
+  SELECT
+    path0
+    -- 시작 지점 경로로의 접근 수
+    , SUM(COUNT(1)) OVER() AS count0
+    -- 곧바로 접근한 경로 (존재하지 않는 경우 문자열 NULL)
+    , COALESCE(path1, 'NULL') AS path1
+    -- 곧바로 접근한 경로로의 접근 수
+    , SUM(COUNT(1)) OVER(PARTITION BY path0, path1) AS count1
+    -- 이어서 접근한 경로(존재하지 않는 경우 문자열로 `NULL` 지정)
+    , COALESCE(path2, 'NULL') AS path2
+    -- 이어서 접근한 경로로의 접근 수
+    , COUNT(1) AS count2
+  FROM
+    activity_log_with_lead_path
+  WHERE
+    -- 상세 페이지를 시작 지점으로 두기
+    path0 = '/detail'
+  GROUP BY
+    path0, path1, path2
+)
+SELECT
+  path0
+  , count0
+  , path1
+  , count1
+  , 100.0 * count1 / count0 AS rate1
+  , path2
+  , count2
+  , 100.0 * count2 / count1 AS rate2
+FROM
+  raw_user_flow
+ORDER BY
+  count1 DESC, count2 DESC
+;
+```
+
+- 중복된 데이터가 많이나와서 `LAG`함수를 사용해서 바로 위의 레코드와 같은 값을 가졌을 때 출력하지 않도록 쿼리
+
+```sql
+WITH
+activity_log_with_lead_path AS (
+  -- CODE.15.17
+)
+, raw_user_flow AS (
+  -- CODE.15.17
+)
+SELECT
+  CASE
+    WHEN
+      COALESCE(
+        -- 바로 위의 레코드가 가진 path0 추출(존재 하지 않는 경우 NOT FOUND)
+        LAG(path0)
+          OVER(ORDER BY count1 DESC, count2 DESC)
+          , 'NOT FOUND'
+      ) <> path0
+    THEN path0
+  END AS path0
+  , CASE
+      WHEN
+        COALESCE(
+          LAG(path0)
+          OVER(ORDER BY count1 DESC, count2 DESC)
+          , 'NOT FOUND'
+        ) AS path0
+      THEN count0
+    END AS count0
+  , CASE
+      WHEN
+        COALESCE(
+          -- 바로 위의 레코드가 가진 여러 값을 추출할 수 있게, 문자열 결합 후 추출
+          -- PostgreSQL, Redshift의 경우 || 연산자 사용
+          -- Hive, BigQuery, SparkSQL의 경우 concat 함수 사용
+          LAG(path0 || path1)
+            OVER(ORDER BY count1 DESC, count2 DESC)
+          , 'NOT FOUND'
+        ) <> (path0 || path1)
+      THEN path1
+    END AS page1
+  , CASE
+      WHEN
+        COALESCE(
+          LAG(path0 || path1)
+            OVER(ORDER BY count1 DESC, count2 DESC)
+          , 'NOT FOUND'
+        ) <> (path0 || path1)
+      THEN count1
+    END AS count1
+  , CASE
+      WHEN
+        COALESCE(
+          LAG(path0 || path1)
+            OVER(ORDER BY count1 DESC, count2 DESC)
+          , 'NOT FOUND') <> (path0 || path1)
+      THEN 100.0 * count1 / count0
+    END AS rate1
+  , CASE
+      WHEN
+        COALESCE(
+          LAG(path0 || path1 || path2)
+            OVER(ORDER BY count1 DESC, count2 DESC)
+          , 'NOT FOUND') <> (path0 || path1 || path2)
+      THEN path2
+    END AS page2
+  , CASE
+      WHEN
+        COALESCE(
+          LAG(path0 || path1 || path2)
+            OVER(ORDER BY count1 DESC, count2 DESC)
+          , 'NOT FOUND') <> (path0 || path1 || path2)
+      THEN count2
+    END AS count2
+  , CASE
+      WHEN
+        COALESCE(
+          LAG(path0 || path1 || path2)
+            OVER(ORDER BY count1 DESC, count2 DESC)
+          , 'NOT FOUND') <> (path0 || path1 || path2)
+      THEN 100.0 * count2 / count1
+    END AS rate2
+  FROM
+    raw_user_flow
+  ORDER BY
+    count1 DESC
+    , count2 DESC
+;
+```
+
+- 이전 페이지 집계하기
+  - 다음페이지 집계했던거에서 `LEAD` 함수를 `LAG` 함수로 변경하면 됨
+
+```sql
+WITH
+activity_log_with_lag_path AS (
+  SELECT
+    session
+    , stamp
+    , path AS path0
+    -- 바로 전에 접근한 경로 추출하기(존재하지 않는 경우 문자열 'NULL'로 지정)
+    , COALESCE(LAG(path, 1) OVER(PARTITION BY session ORDER BY stamp ASC), 'NULL') AS path1
+    -- 그 전에 접근한 페이지 추출하기(존재하지 않는 경우 문자열 'NULL'로 지정)
+    , COALESCE(LAG(path, 2) OVER(PARTITION BY session ORDER BY stamp ASC), 'NULL') AS path2
+  FROM
+    activity_log
+)
+, raw_user_flow AS (
+  SELECT
+    path0
+    -- 시작 지점 경로로의 접근 수
+    , SUM(COUNT(1)) OVER() AS count0
+    , path1
+    -- 바로 전의 경로로의 접근 수
+    , SUM(COUNT(1)) OVER(PARTITION BY path0, path1) AS count1
+    , path2
+    -- 그 전에 접근한 경로로의 접근 수
+    , COUNT(1) AS count2
+  FROM
+    activity_log_with_lag_path
+  WHERE
+    -- 상세 페이지를 시작 지점으로 두기
+    path0 = '/detail'
+  GROUP BY
+    path0, path1, path2
+)
+SELECT
+  path2
+  , count2
+  , 100.0 * count2 / count1 AS rate2
+  , path1
+  , count1s
+  , 100.0 * count1 / count0 AS rate1
+  , path0
+  , count0
+FROM
+  raw_user_flow
+ORDER BY
+  count1 DESC
+  , count2 DESC
+;
+```
+
+### 15-8 페이지 완독률 집계하기
+
+- 사용자가 페이지를 끝까지 읽었는지 파악 필요
+- 완독률을 집계하는 쿼리
+
+```sql
+SELECT
+  url
+  , action
+  , COUNT(1)
+    / SUM(CASE WHEN action='view' THEN COUNT(1) ELSE 0 END)
+        OVER(PARTITION BY url)
+    AS action_per_view
+FROM read_log
+GROUP BY
+  url, action
+ORDER BY
+  url, count DESC
+;
+```
+
+### 15-9 사용자 행동 전체를 시각화하기
+
+- 한눈에 볼 수 있도록 조감도를 작성하여 서비스 개선 포인트를 잡아보기
