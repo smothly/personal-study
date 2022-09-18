@@ -37,3 +37,10 @@
 10. Udemy Hadoop
    - [udemy 링크](https://www.udemy.com/course/best-hadoop/)
    - Hadoop ecosystem에 대한 전반적인 이해에 도움을 줌. 하지만 너무 얕음.
+11. Udemy Spark
+   - [udemy 링크](https://www.udemy.com/course/best-hadoop/)
+   - 보는중...
+12. Inflearn 동시성과 병렬성 문법 배우기
+   - [inflearn 링크](https://www.inflearn.com/course/%ED%94%84%EB%A1%9C%EA%B7%B8%EB%9E%98%EB%B0%8D-%ED%8C%8C%EC%9D%B4%EC%8D%AC-%EC%99%84%EC%84%B1-%EC%9D%B8%ED%94%84%EB%9F%B0-%EC%98%A4%EB%A6%AC%EC%A7%80%EB%84%90/dashboard)
+   - 보는중...
+
