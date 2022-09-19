@@ -137,11 +137,249 @@ if __name__ == '__main__':
 
 ---
 
-### I/O-Bound Multithreading
+- i/o bound 잡인 크롤링을 multithreading, multiprocessing, asyncio로 각각 구현해보고 차이를 보기
 
-### 예제
-- 
+### 예제1 I/O Bound Multithreading
+- thread는 스택을 제외하고는 공유하므로, 각각의 독립된 네임스페이스를 얻기위해 `threading.local()`을 사용함
+- `GIL`제약이 있지만, I/O bound 태스크에서는 process 생성의 비용보다는 성능이 더 괜찮음
 
 ```python
+import concurrent.futures
+import threading
+import requests
+import time
 
+# 각 스레드에 생성되는 객체(독립된 네임스페이스)
+# 각 스레드마다 독립된 메모리를 얻는 것. 크롤링할 때 각 스레드가 다른 헤더를 가지게 할 때 쓰임
+# 멀티스레딩으로 동일한 스레드 객체가 살아있으면 그대로 사용
+thread_local = threading.local()
+
+def get_session():
+    if not hasattr(thread_local, "session"):
+        thread_local.session = requests.session()
+    return thread_local.session
+
+# 실행함수1 (다운로드)
+def request_site(url):
+    # 세션획득
+    session = get_session()        
+
+    print(session) # session을 몇번 돌려 쓰는지 확인
+    # print(session.headers)
+    with session.get(url) as response:
+        print(f'[Read Contents: {len(response.content)}, Status Code : {response.status_code} from {url}]')
+
+# 실행함수2 (요청)
+def request_all_sites(urls):
+    # 멀티스레드 실행
+    # 반드시 max_worker 개수 조절 후 session 객체 확인
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        executor.map(request_site, urls)
+
+# 메인 함수
+def main():
+    # 테스트 URL
+    urls = [
+        "https://www.jython.org",
+        "http://olympus.realpython.org/dice",
+        "https://realpython.com"
+    ] * 5
+
+    # 실행 시간 측정
+    start_time = time.time()
+
+    request_all_sites(urls)
+
+    # 실행 시간 종료
+    duration = time.time()- start_time
+
+    print('=' * 15)
+    # 결과 출력
+    print(f'Downloaded {len(urls)} sites in {duration} seconds')
+
+# 메인함수 시작
+if __name__ == '__main__':
+    main()
+```
+
+### 예제2 I/O Bound Multiprocessing
+- process 생성의 비용이 크므로 `initializer` 파라미터를 통해 session을 초기에 생성하고 공용으로 사용한다.
+
+
+```python
+import multiprocessing
+import requests
+import time
+
+# 각 프로세스 메모리 영역에 생성되는 객체(독립적)
+# 함수 실행 할 때 마다 객체 생성은 좋지 않으므로 각 프로세스마다 할당
+
+session = None
+
+def set_global_session():
+    global session
+    if not session:
+        session = requests.session()
+
+# 실행함수1 (다운로드)
+def request_site(url):    
+    # session 확인
+    print(session) 
+    # print(session.headers)
+    with session.get(url) as response:
+        name = multiprocessing.current_process().name
+        print(f'[{name} Read Contents: {len(response.content)}, Status Code : {response.status_code} from {url}]')
+
+# 실행함수2 (요청)
+def request_all_sites(urls):
+    # 멀티프로세싱  실행
+    # processes  개수 조절 후 session 객체 및 실행 시간 확인
+    with multiprocessing.Pool(initializer=set_global_session, processes=4) as pool:
+        pool.map(request_site, urls)
+
+# 메인 함수
+def main():
+    # 테스트 URL
+    urls = [
+        "https://www.jython.org",
+        "http://olympus.realpython.org/dice",
+        "https://realpython.com"
+    ] * 5
+
+    # 실행 시간 측정
+    start_time = time.time()
+
+    request_all_sites(urls)
+
+    # 실행 시간 종료
+    duration = time.time()- start_time
+
+    print('=' * 15)
+    # 결과 출력
+    print(f'Downloaded {len(urls)} sites in {duration} seconds')
+
+# 메인함수 시작
+if __name__ == '__main__':
+    main()
+```
+
+### 예제3 Asyncio Basic
+- 3.4부터 비동기(asyncio) 표준라이브러리 등장
+- 비동기 함수는 `async`를 붙이고, 비동기 함수 내에서 비동기 함수를 호출할 때는 `await`을 붙임
+- 비동기 함수내에 동기 함수가 있으면 동기적으로 실행됨
+
+```python
+import asyncio
+import requests
+import time
+
+def exe_calculate_sync(name, n):
+    for i in range(1, n+1):
+        print(f'{name} -> {i} of {n} is calculating...')
+        time.sleep(1)
+    print(f'{name} - {n} working done!')
+
+def process_sync():
+    start = time.time()
+
+    exe_calculate_sync('One', 3)
+    exe_calculate_sync('Two', 2)
+    exe_calculate_sync('Three', 1)
+
+    end = time.time()
+
+    print(f'>>> total seconds : {end - start}')
+
+async def exe_calculate_async(name, n):
+    for i in range(1, n+1):
+        print(f'{name} -> {i} of {n} is calculating...')
+        # time.sleep(1) # 기존 time.sleep 함수는 동기임. await을 지원하지 않음. 동기함수를 사용하게되면 전체함수가 동기적으로 변하게 됨
+        await asyncio.sleep(1)
+    print(f'{name} - {n} working done!')
+
+async def process_async():
+    start = time.time()
+
+    await asyncio.wait([
+        exe_calculate_async('One', 3),
+        exe_calculate_async('Two', 2),
+        exe_calculate_async('Three', 1),
+    ])
+    
+    end = time.time()
+
+    print(f'>>> total seconds : {end - start}')
+if __name__ == '__main__':
+    # Sync 실행
+    process_sync()
+    
+    # Async 실행
+    # 3.7이상에서는 아래와 같이 사용
+    asyncio.run(process_async())
+    # 이전 버전
+    # asyncio.get_event_loop().run_until_complete(process_async())
+```
+
+
+### 예제4 I/O Bound Asyncio Basic
+- `requests`는 동기 라이브러리여서 `aiohttp` 비동기 라이브러리를 통해 구현
+- `async with` 문안에서 `await`을 실행해서 비동기적으로 한꺼번에 실행
+
+```python
+import asyncio
+import aiohttp
+# import requests 동기 라이브러리라 사용하지 못함
+import time
+
+# 스레딩보다 높은 코드 복잡도
+
+# 실행함수1 (다운로드)
+async def request_site(session, url):    
+    # session 확인
+    print(session) 
+    # print(session.headers)
+
+    async with session.get(url) as response:
+        print('Read Contents {0}, from {1}'.format(response.content_length, url))
+
+# 실행함수2 (요청)
+async def request_all_sites(urls):
+    async with aiohttp.ClientSession() as session:
+        # 작업 목록
+        tasks = []
+        for url in urls:
+            # 태스크 목록 생성
+            task = asyncio.ensure_future(request_site(session, url))
+            tasks.append(task)
+        
+        # 태스크 확인
+        print(*tasks)
+        print(tasks)
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+# 메인 함수
+def main():
+    # 테스트 URL
+    urls = [
+        "https://www.jython.org",
+        "http://olympus.realpython.org/dice",
+        "https://realpython.com"
+    ] * 5
+
+    # 실행 시간 측정
+    start_time = time.time()
+
+    # asyncio.run(request_all_sites(urls)) # 버그가 있어 이전 버전으로 실행
+    asyncio.get_event_loop().run_until_complete(request_all_sites(urls))
+
+    # 실행 시간 종료
+    duration = time.time()- start_time
+
+    print('=' * 15)
+    # 결과 출력
+    print(f'Downloaded {len(urls)} sites in {duration} seconds')
+
+# 메인함수 시작
+if __name__ == '__main__':
+    main()
 ```
