@@ -82,7 +82,7 @@
 - slow I/O bound 작업에 유용
 - 1개 부엌, 1명 요리사, 10개 요리
 
-## 3-4 I/O bound, Synchronous
+## 3-4 I/O bound(1) - Synchronous
 
 ---
 
@@ -133,7 +133,7 @@ if __name__ == '__main__':
     main()
 ```
 
-## 3-5 threading vs asyncio vs multiprocessing
+## 3-5 I/O bound(2) -threading vs asyncio vs multiprocessing
 
 ---
 
@@ -321,7 +321,7 @@ if __name__ == '__main__':
 ```
 
 
-### 예제4 I/O Bound Asyncio Basic
+### 예제4 I/O Bound Asyncio
 - `requests`는 동기 라이브러리여서 `aiohttp` 비동기 라이브러리를 통해 구현
 - `async with` 문안에서 `await`을 실행해서 비동기적으로 한꺼번에 실행
 
@@ -381,5 +381,113 @@ def main():
 
 # 메인함수 시작
 if __name__ == '__main__':
+    main()
+```
+
+## 3-6 CPU Bound(1) - Synchronous
+
+### 예제
+- 300만번 loop돌면서 곱하기 하는 예제
+- Sync하게 돌아가고 multiprocessing으로 바꾸기 위해 만든 예제
+
+```python
+import time
+
+# 실행 함수1(계산)
+def cpu_bound(number):
+    return sum(i * i for i in range(number))
+
+# 실행 함수2
+def find_sums(numbers):
+    result = []
+    for number in numbers:
+        result.append(cpu_bound(number))
+
+    return result
+
+def main():
+    numbers = [3_000_000 + x for x in range(30)]
+
+    print(numbers)
+
+    start_time = time.time()
+    # 실행
+    total = find_sums(numbers)
+
+    # 결과 출력
+    print()
+    print(f'Toral list: {total}')
+    print(f'Sum : {sum(total)}')
+
+    duration = time.time() - start_time
+
+    print()
+    print(f'Duraion: {duration} seconds')
+
+if __name__ == "__main__":
+    main()
+```
+
+## 3-7 CPU Bound(2) - Multiprocessing
+
+### 예제
+- 이전 예제와 다르게 시간이 1/5 가량 줄어들음
+- `manager.list()` 를 통해 프로세스간 공유 리스트 생성
+
+```python
+import os
+import time
+from multiprocessing import current_process, Array, Manager, Process, freeze_support
+
+# 실행 함수1(계산)
+def cpu_bound(number, total_list):
+
+    process_id = os.getpid()
+    process_name = current_process().name
+
+    # Process 정보 출력
+    print(f'Process ID : {process_id}, Process Name : {process_name}')
+    total_list.append(sum(i * i for i in range(number)))
+
+def main():
+    numbers = [3_000_000 + x for x in range(30)]
+
+    print(numbers)
+
+    start_time = time.time()
+    
+    # 프로세스 리스트 선언
+    processes = list()
+    
+    # 프로세스 공유 매니저
+    manager = Manager()
+
+    # 리스트 획득(프로세스 공유)
+    total_list = manager.list()
+
+    # 프로세스 생성 및 실행
+    for i in numbers: # 1 ~ 100적절히 조절
+        # 생성
+        t = Process(name=str(i), target=cpu_bound, args=(i, total_list,))
+        # 배열에 담기
+        processes.append(t)
+        # 시작
+        t.start()
+
+    # Join
+    for process in processes:
+        process.join()
+    
+    # 결과 출력
+    print()
+    print(f'Total list: {total_list}')
+    print(f'Sum : {sum(total_list)}')
+
+    duration = time.time() - start_time
+
+    print()
+    print(f'Duraion: {duration} seconds')
+
+if __name__ == "__main__":
     main()
 ```
