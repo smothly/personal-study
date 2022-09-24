@@ -39,7 +39,7 @@
 - 병렬 처리는 multi processing, asyncio가 있음
 - thread 동시성 완벽 처리를 위해 jython, ironpython, stackless python 등이 존재하긴 함
 
-## 1-3 Thread - baic
+## 1-3 Thread - basic
 
 ---
 

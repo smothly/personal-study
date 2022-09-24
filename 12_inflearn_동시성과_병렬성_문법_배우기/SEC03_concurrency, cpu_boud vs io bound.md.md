@@ -47,7 +47,7 @@
 - Sync
   - IO 작업 완료 여부에 대한 noti는 유저프로세스(호출하는 함수) -> 커널(호출되는 함수)
 
-### 추가 자료(정리) - ![블로그](https://homoefficio.github.io/2017/02/19/Blocking-NonBlocking-Synchronous-Asynchronous/)
+### 추가 자료(정리) - [블로그](https://homoefficio.github.io/2017/02/19/Blocking-NonBlocking-Synchronous-Asynchronous/)
 - Blocking/NonBlocking은 호출되는 함수가 바로 리턴하느냐 마느냐가 관심사
   - 바로 리턴하지 않으면 Blocking
   - 바로 리턴하면 NonBlocking
@@ -81,6 +81,11 @@
 - cooperative multitasking, tasks coopetatibely decide switching
 - slow I/O bound 작업에 유용
 - 1개 부엌, 1명 요리사, 10개 요리
+
+### 추가자료 - [스택오버플로우](https://stackoverflow.com/questions/27435284/multiprocessing-vs-multithreading-vs-asyncio-in-python-3)
+- CPU Bound => Multi Processing
+- I/O Bound, Fast I/O, Limited Number of Connections => Multi Threading
+- I/O Bound, Slow I/O, Many connections => Asyncio
 
 ## 3-4 I/O bound(1) - Synchronous
 
