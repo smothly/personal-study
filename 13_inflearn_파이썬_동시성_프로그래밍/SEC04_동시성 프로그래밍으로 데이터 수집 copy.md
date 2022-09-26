@@ -108,7 +108,8 @@ if __name__ == "__main__":
 
 ### 예제
 - `aiofiles`를 통해서 파일스기도 비동기로 구현
-- 
+- img 이름이 가끔 잘못되어 `split` 구문 추가
+- start 쿼리 파라미터가 page number가 아니라 object number여서 20개씩 가져오게 변경
 
 ```python
 import os
