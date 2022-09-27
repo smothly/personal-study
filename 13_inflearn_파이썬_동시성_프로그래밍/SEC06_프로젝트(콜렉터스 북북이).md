@@ -116,7 +116,9 @@ async def read_item(request: Request, id: str):
   - Object Document Mapper
   - 파이썬과 MongoDB를 연결하기 위함
   - RDB는 ORM을 사용
+- `event`를 받아 mongodb와 연결을 자동화함
 - models 디렉토리를 사용하여 추상화
+  - `__init__.py`에서 mongo db 연결 코드 생성
 - book 모델 개발
 - db에 insert
 
@@ -124,10 +126,33 @@ async def read_item(request: Request, id: str):
 
 ---
 
+- naver book search하는 로직 만들기
+  - `book_scraper.py`를 만들기
+  - async로 구현
+  - return값을 하나의 리스트로 만듬
+
 ## 6-8 서비스 로직 개발
 
 ---
 
+- 웹 페이지에서 search하면 book 정보를 가져와 DB에 저장
+  - `saveall` 메소드로 네이버 API로 가져온 book 객체 한꺼번에 저장
+
 ## 6-9 프로젝트 마무리
 
 ---
+
+- DB에 저장된 데이터를 보여주기
+  - 템플릿 코드 생성
+- 키워드의 중복현상 해결
+  - 검색어가 없다면 입력해달라는 문구 띄우기
+  - 이미 조회된 키워드면 기존 DB에 있는 항목들 보여주기
+
+# SEC07 AWS에 프로젝트 올리기
+
+## 배포
+- vps인 lightsail 사용
+- github에 코드 올리기
+- 서버에서 코드 받기
+- requirements.txt 라이브러리 설치
+- server.py 실행
