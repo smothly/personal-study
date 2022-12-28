@@ -851,18 +851,677 @@ FROM
     ;
     ```
 
-- 
+- 점수 정규화하기
+  - 벡터 내적은 정밀도에 문제가 있음 => `벡터 정규화` = 벡터를 모두 같은 길이로 만든다는 의미
+    - 접근 수가 많은 아이템의 유사도가 상대적으로 높게 나옴
+    - 점수의 상대적인 위치 파악 불가
+  - 벡터 정규화
+    - 벡터이 길이 = 유클리드 거리
+    - norm = 벡터의 크기
+    - L2 정규화 = norm으로 벡터의 각 수치를 나누면 벡터의 norm을 1로 만들 수 있음
+    - 아이템 벡터를 L2 정규화하는 쿼리
+      - `SUM` `OVER` `SQRT` 함수를 사용
+
+    ```sql
+    WITH
+    ratings AS (
+    -- CODE.23.1.
+    )
+    , product_base_normalized_ratings AS (
+    -- 아이템 벡터 정규화하기
+    SELECT
+        user_id
+        , product
+        , score
+        , SQRT(SUM(score * score) OVER(PARTITION BY product)) AS norm
+        , score / SQRT(SUM(score * score) OVER(PARTITION BY product)) AS norm_score
+    FROM
+        ratings
+    )
+    SELECT *
+    FROM
+    prodduct_base_normalized_ratings
+    ;
+    ```
+
+    - 정규화된 점수로 아이템의 유사도를 계산하는 쿼리
+      - 자기 자신과 유사도는 1.0 임
+      - 코사인 유사도 = 벡터를 L2정규화해서 내적한 값
+    
+    ```sql
+    WITH
+    ratings AS (
+    -- CODE.23.1.
+    )
+    , product_base_normalized_ratings AS (
+    -- CODE.23.3.
+    )
+    SELECT
+    r1.product AS target
+    , r2.product AS related
+    -- 모든 아이템을 열람/구매 한 사용자 수
+    , COUNT(r1.user_id) AS users
+    -- 스코어들을 곱하고 합계를 구해 유사도 계산하기
+    , SUM(r1.norm_score * r2.norm_score) As score
+    -- 상품의 유사도 순위 구하기
+    , ROW_NUMBER()
+        OVER(PARTITION BY r1.product ORDER BY SUM(r1.norm_score * r2.norm_score) DESC)
+        AS rank
+    FROM
+    product_base_normalized_ratings AS r1
+    JOIN
+        product_base_normalized_ratings AS r2
+        -- 공통 사용자가 존재하면 상품 페어 만들기
+        ON r1.user_id = r2.user_id
+    GROUP BY
+    r1.product, r2.product
+    ORDER BY
+    target, rank
+    ;
+    ```
+
+### 23-3 당신을 위한 추천 상품
+
+- 사용자와 관련된 추천이여서 페이지나 메시지 알림 등 다양하게 활용할 수 있음
+- 사용자끼리의 유사도를 계산하는 쿼리
+
 ```sql
+WITH
+ratings AS (
+  -- CODE.23.1.
+)
+, user_base_normalized_ratings AS (
+  -- 사용자 벡터 정규화하기
+  SELECT
+    user_id
+    , product
+    , score
+    -- PARTITION BY user_id으로 사용자별 벡터 노름 계산하기
+    , SORT(SUM(score * score) OVER(PARTITION BY user_id)) AS more
+    , score / SORT(SUM(score * score) OVER(PARTITION BY user_id)) AS norm_score
+  FROM
+    ratings
+)
+, related_users AS (
+  -- 경향이 비슷한 사용자 찾기
+  SELECT
+    r1.user_id
+    , r2.user_id AS related_user
+    , COUNT(r1.product) AS products
+    , SUM(r1.norm_score * r2.norm_score) AS score
+    , ROW_NUMBER()
+        OVER(PARTITION BY r1.user_id ORDER BY SUM(r1.norm_score * r2.norm_score) DESC) AS rank
+  FROM
+    user_base_normalized_ratings AS r1
+    JOIN
+      user_base_normalized_ratings AS r2
+      ON r1.product = r2.product
+  WHERE
+    r1.user_id <> r2.user_id
+  GROUP BY
+    r1.user_id, r2.user_id
+)
+SELECT *
+FROM
+  related_users
+ORDER BY
+  user_id, rank
+;
 ```
+
+- 순위가 높은 유사 사용자를 기반으로 추천 아이템을 추출하는 쿼리
+  - 유사도 상위 N명 추출
+  - 기존 구매한 상품은 제외
+
 ```sql
-```
-```sql
-```
-```sql
+WITH
+ratings AS (
+  -- CODE.23.1.
+)
+, user_base_normalized_ratings AS (
+  -- CODE.23.5.
+)
+, related_users AS (
+  -- CODE.23.5.
+)
+, related_user_base_products AS (
+  SELECT
+    u.user_id
+    , r.product
+    , SUM(u.score * r.score) * AS score
+    , ROW_NUMBER()
+        OVER(PARTITION BY u.user_id ORDER BY SUM(u.score * r.score) DESC)
+    AS rank
+  FROM
+    related_users AS u
+    JOIN
+      ratings AS r
+      ON u.related_user = r.user_id
+  WHERE
+    u.rank <= 1
+  GROUP BY
+    u.user_id, r.product
+)
+SELECT *
+FROM
+  related_user_base_products
+ORDER BY
+  user_id
+;
 ``` 
+- 이미 구매한 아이템을 필터링하는 쿼리
+  - `LEFT JOIN` 해서 아이템의 구매가 0 또는 NULL인 아이템을 압축한 뒤 순위 생성
+
 ```sql
+WITH
+ratings AS (
+  -- CODE.23.1.
+)
+, user_base_normalized_ratings AS (
+  -- CODE.23.5.
+)
+, related_suers AS (
+  -- CODE.23.5.
+)
+, related_user_base_products AS (
+  -- CODE.23.6.
+)
+SELECT
+  p.user_id
+  , p.product
+  , p.score
+  , ROW_NUMBER()
+      OVER(PARTITION BY p.user_id ORDER BY p.score DESC) AS rank
+FROM
+  related_user_base_products AS p
+  LEFT JOIN
+    ratings AS r
+    ON p.user_id = r.user_id
+    AND p.product = r.product
+WHERE
+  -- 대상 사용자가 구매하지 않은 상품만 추천하기
+  COALESCE(r.purchase_count, 0) = 0
+ORDER BY
+  p.user_id
+;
 ```
+
+- `User to Item`의 경우 데이터가 충분하지 않으면 예측하기 어려움. 따라서, 등록한 지 얼마 안된 사용자는 다른 추천 로직(랭킹 또는 콘텐츠 기반)을 적용하는 것이 좋음
+- 게스트 사용자 전체를 한명으로 두고 대응하는 방법도 있음
+
+### 23-4 추천 시스템을 개선할 때의 포인트
+
+- 지속적으로 운용할 때 어떻게 하면 정밀도를 높일 수 151512313123122312312321지의 관점
+- 값과 리스트 조작에서 개선할 포인트
+  - 가중치
+    - 열람 로그 1포인트, 구매 로그 3포인트 처럼 가중치 두기
+  - 필터
+    - 스팸 공격 같은 비정상 로그나 카테고리나 지역등을 제한
+  - 정렬
+    - 어떤 점수를 내고 정렬할지 고민하기. 목적(신규, 기대구매수 등)에 따라 정렬해서 추천을 제공
+  - 예시로는 별점이 높지만 거리가 먼 음식점의 경우 거리/별점으로 점수를 매겨 추천할 수 있음
+- 구축 방법에 따른 개선 포인트
+  - 데이터 수집
+    - 다양한 데이터를 수집하여 정밀도를 높이기
+  - 데이터 가공
+    - 데이터를 계산하기 쉬운 상태로 가공하기
+    - 비정상적인 데이터 필터링
+    - 평가기간을 두거나 가중치 제한을 두기
+  - 데이터 계산
+    - 순위를 구하는 로직으로, 어떠한 로직을 적용할지 적용해보기
+    - 때로는 간단한 매출 순서나 데모그래픽 정보등에 따라 점수계산해도 좋은 추천 시스템이 나올 수 있음
+  - 데이터 정렬
+    - 계산한 결과를 바로 활용하기 보다는 필터링이나 정렬 처리등을 추가해서 더 효율적으로 만들기
+    - 데모그래픽 정보 활용
+
+### 23-5 출력할 때 포인트
+
+- 출력 페이지, 위치, 시점 검토하기
+  - 추천출력이 상품보다 위에 있을 경우 추천을 더 중요시, 상품보다 아래 있을 경우 이탈을 방지
+  - ex) 장바구니 화면에서 상품 추천은 이탈 막기와 새로운 선택지를 주는 추천방법
+- 추천의 이유
+  - '구매한 사람이 이러한 상품도 구매했다', '어떤 상품을 기반으로 추천합니다' 등 추천이유를 제공해야 효과가 있음
+  - 일반적인 사람들은 인지편향과 편승효과가 있음
+- 크로스셀을 염두한 추천하기
+  - 같이 자주 구매하는 제품을 함께 장바구니에 담을 수 있게 하기
+- 서비스와 함께 제공하기
+  - '다음과 같은 상품을 구매하면 무료배송 서비스 제공' 출력
+
+### 23-6 추천과 관련한 지표
+
+- 추천시스템의 대표적인 평가 지표 목록
+  - Microsofet Research에서 shani guy가 작성한 `Evaluating Recommender`
+  - ![추천시스템 평가지표](https://miro.medium.com/max/1248/1*5L_T_-yH1yr-aEX5_tcPNA.png)
+
+## 24강 점수 계산하기
+
+---
+
+### 24-1 여러 값을 균형있게 조합해서 점수 계산하기
+
+- 재현율, 적합률 같이 트레이드 오프 관계가 있는 점수의 경우 조합해서 사용해야 함
+- 평균 종류
+  - 산술 평균
+    - 일반적인 평균
+  - 기하 평균
+    - 값을 곱한뒤 개수만콤 제곱근을 걸은 값. 각각의 값은 양수여야 함
+    - 어떤 지표를 여러번 곱해야하는 경우 기하 평균이 적합 ex) 월 이자  
+  - 조화 평균
+    - 각 값의 역수의 산술평균을 구하고 다시 역수를 취함
+    - 비율을 나타내는 값의 평균을 계산할 때 유용. ex) 평균 속도 계산
+- 평균 계산
+  - where절에서 평균을 못구하는 레코드는 제거
+  - `sqrt`함수가 아닌 여러값에 대응할 수 있는`power`함수의 매개변수에 1/2 넣어 계산
+  - 두 값의 데이터가 다를 경우 `산술 > 기하 > 조화` 순이다.
+  - 세로 데이터의 평균을 계산하는 쿼리
+
+    ```sql
+    SELECT
+    *
+    -- 산술 평균
+    , (recall + precision) / 2 AS arithmetic_mean
+    -- 기하 평균
+    , POWER(recall * precision, 1.0 / 2) AS geometric_mean
+    -- 조화 평균
+    , 2.0 / ((1.0 / recall) + (1.0 / precision)) AS harmonic_mean
+    FROM
+    search_evaluation_by_col
+    -- 값이 0보다 큰 것만으로 한정하기
+    WHERE recall * precision > 0
+    ORDER BY path
+    ;
+    ```
+
+  - 가로 기반 데이터의 평균 계산하는 쿼리
+  
+    ```sql
+    SELECT
+    path
+    -- 산술 평균
+    , AVG(value) AS arithmetic_mean
+    -- 기하 평균(대수의 산술 평균)
+    -- PostgreSQL, Redshift, 상용 로그로 log함수 사용하기
+    , POWER(10, AVG(log(value))) AS geometric_mean
+    -- Hive, BigQuery, SparkSQL, 상용 로그로 log10 함수 사용
+    , POWER(10, AVG(log10(value))) AS geometric_mean
+    -- 조화 평균
+    , 1.0 / (AVG(1.0 / value)) AS harmonic_mean
+    FROM
+    search_evaluation_by_row
+    -- 값이 0보다 큰 것만으로 한정
+    WHERE value > 0
+    GROUP BY path
+    -- 빠진 데이터가 없게 path로 한정
+    HAVING COUNT(*) = 2
+    GROUP BY path
+    ;
+    ```
+
+- f1 score = 재현율과 적합률의 조화 평균
+- 세로 기반 데이터의 가중 평균을 계산하는 쿼리 (재현3:7적합)
+
 ```sql
+SELECT
+  *
+  -- 가중치가 추가된 산술 평균
+  , 0.3 * recall + 0.7 * preicision AS weighted_a_mean
+  -- 가중치가 추가된 기하 평균
+  , POWER(recall, 0.3) * POWER(precision, 0.7) AS weighted_g_mean
+  -- 가중치가 추가된 조화 평균
+  , 1.0 / ((0.3) / recall) + (0.7 / precision)) AS weighted_h_mean
+FROM
+  search_evaluation_by_col
+-- 값이 0보다 큰 것만으로 한정
+WHERE recall * precision > 0
+ORDER BY path
+;
 ```
+
+- 가로 기반 테이블의 가중 평균을 계산하는 쿼리
+  - 임시 테이블을 만들어 조인하여 사용
+  - 레코드수로 나누는 `AVG` 대신  `SUM` 함수 사용
+
 ```sql
+WITH
+weights AS (
+  -- 가중치 마스터 테이블(가중치의 합계가 1.0이 되도록 설정)
+            SELECT 'recall'   AS index, 0.3 AS weight
+  UNION ALL SELECT 'precision' AS index, 0.7 AS weight
+)
+SELECT
+  e.path
+  -- 가중치가 추가된 산술 평균
+  , SUM(w.weight * e.value) AS weighted_a_mean
+  -- 가중치가 추가된 기하 평균
+  -- PosgreSQL, Redshift, log 사용
+  , POWER(10, SUM(w.weight * log(e.value))) AS weighted_g_mean
+  -- Hive, BigQuery, SparkSQL, log10 함수 사용
+  , POWER(10, SUM(w.weight * log10(e.value))) AS weighted_g_mean
+
+  -- 가중치가 추가된 조화 평균
+  , 1.0 / (SUM(w.weight / e.value)) AS weighted_h_mean
+FROM
+  search_evaluation_by_row AS e
+  JOIN
+    weights AS w
+    ON e.index = w.index
+  -- 값이 0보다 큰 것만으로 한정하기
+WHERE e.value > 0
+GROUP BY e.path
+-- 빠진 데이터가 없도록 path로 한정
+HAVING COUNT(*) = 2
+ORDER BY e.path
+;
+```
+
+### 24-2 값의 범위가 다른 지표를 정규화해서 비교 가능한 상태로 만들기
+
+- 범위가 다른 지표를 결합할 때 정규화를 해주어야 함
+- min-max 정규화
+  - 각 지표의 최소값 최대값을 0~1의 스케일로 정규화
+  - 열람 수와 구매 수에 min-max 정규화를 적용하는 쿼리
+  
+    ```sql
+    SELECT
+    user_id
+    , product
+    , view_count AS v_count
+    , purchase_count AS p_count
+    , 1.0 * (view_count - MIN(view_count) OVER())
+        -- PostgreSQL, Redshift, BigQuery, SparkSQL의 경우 `NULLIF`로 0으로 나누는 것 피하기
+        / NULLIF((MAX(view_count) OVER() - MIN(view_count) OVER()), 0)
+        -- Hive의 경우 NULLIF 대신 CASE 사용
+        / (CASE
+            WHEN MAX(view_count) OVER() - MIN(view_count) OVER() = 0 THEN NULL
+            ELSE MAX(view_count) OVER() - MIN(view_count) OVER()
+            END
+        )
+        AS norm_view_count
+    , 1.0 * (purchase_count - MIN(purchase_count) OVER())
+        -- PostgreSQL, Redshift, BigQuery, SparkSQL의 경우 `NULLIF`로 0으로 나누는 것 피하기
+        / NULLIF((MAX(purchase_count) OVER() - MIN(purchase_count) OVER()), 0)
+        -- Hive의 경우 NULLIF 대신 CASE 사용
+        / (CASE
+            WHEN MAX(purchase_count) OVER() - MIN(purchase_count) OVER() = 0 THEN NULL
+            ELSE MAX(purchase_count) OVER() - MIN(purchase_count) OVER()
+            END
+        )
+        AS norm_p_count
+    FROM action_counts
+    ORDER BY user_id, product;
+    ```
+
+- 시그모이드 함수로 변화하기
+  - min-max 정규화의 문제: 집단 변화에 따라 정규화 후 값이 다 바뀜
+  - 0~1의 범위로 변환해주는 s자 곡선을 그리는 시그모이드 함수
+  - 시그모이드 함수를 사용해 변환하는 쿼리
+
+    ```sql
+    SELECT
+    user_id
+    , product
+    , view_count AS v_count
+    , purchase_count AS p_count
+    -- gain을 0.1로 사용한 sigmoid 함수
+    , 2.0 / (1 + exp(-0.1 * view_count)) - 1.0 AS sigm_v_count
+    -- gain을 10으로 사용한 sigmoid 함수
+    , 2.0 / (1 + exp(-10 * purchase_count)) - 1.0 AS sigm_p_count
+    FROM action_counts
+    ORDER BY user_id, product;
+    ``` 
+
+  - 열람 수를 다룰 때 비선형 변환을 하는 것이 더 이해하기 편함
+
+### 24-3 각 데이터의 편차값 계산하기
+
+- 표쥰편차, 정규값, 편차값
+  - 표준편차
+    - 표준편차가 커질수록 데이터에 쏠림이 있다는 의미
+    - 모집단의 표준편차를 구할 때
+      - SQL : stddev_pop
+      - 표준편차 = v((각 데이터 - 평균)^2을 모두 더한 것 / 데이터의 수)
+    - 모집단의 일부를 기반으로 표준편차를 구할 때
+      - SQL : sqddev
+      - 표준편차 = v((각 데이터 - 평균)^2를 모두 더한것 / 데이터의 개수 - 1)
+  - 정규값
+    - 평균으로부터 얼마나 떨어져 있는지, 데이터의 쏠림 정도를 기반으로 점수의 가치를 평가하기 위해 변환
+    - 정규값 = (각각의 데이터 - 평균) / 표준편차
+    - 정규값의 평균은 0, 표준편차는 1이 됨
+  - 편차값
+    - 조건이 다른 데이터를 쉽게 비교할 때 사용하며, 정규값을 활용
+    - 편차값 = 각 정규화된 데이터 * 10 + 50
+    - 편차값의 평균은 50 표준편차는 10이 됨 
+- 표준편차, 기본값, 편차값을 계산하는 쿼리
+
+```sql
+SELECT
+  subject
+  , name
+  , score
+  -- 과목별로 표준편차 구하기
+  , stddev_pop(score) OVER(PARTITION BY subject) AS stddev_pop
+  -- 과목별 평균 점수 구하기
+  , AVG(score) OVER(PARTITION BY subject) AS avg_score
+  -- 점수별로 기준 점수 구하기
+  , (score - AVG(score) OVER(PARTITION BY subject))
+    / stddev_pop(score) OVER(PARTITION BY subject) AS std_value
+  -- 점수별로 편차값 구하기
+  , 10.0 * (score - AVG(score) OVER(PARTITION BY subject))
+    / stddev_pop(score) OVER(PARTITION BY subject) + 50 AS deviation
+FROM exam_scores
+ORDER BY subject, name;
+```
+
+- 표준편차를 따로 계산하고, 기본값과 편차값을 계산하는 쿼리
+
+```sql
+WITH
+exam_stddev_pop AS (
+  -- 다른 테이블에서 과목별로 표준편차 구해두기
+  SELECT
+    subject
+    , stddev_pop(score) AS stddev_pop
+  FROM exam_scores
+  GROUP BY subject
+)
+SELECT
+  s.subject
+  , s.name
+  , s.score
+  , d.stddev_pop
+  , AVG(s.score) OVER(PARTITION BY s.subject) AS avg_score
+  , (s.score - AVG(s.score) OVER(PARTITION BY s.subject)) / d.stddev_pop AS std_value
+  , 10.0 * (s.score - AVG(s.score) OVER(PARTITION BY s.subject)) / d.stddev_pop + 50 AS deviation
+FROM
+  exam_scores AS s
+  JOIN
+    exam_stddev_pop AS d
+    ON s.subject = d.subject
+ORDER BY s.subject, s.name;
+```
+
+### 24-4 거대한 숫자 지표를 직감적으로 이해하기 쉽게 가공하기
+
+- 1과2와 차이와 10001과 10002 차이는 다름. 이럴때 `로그`를 사용해 데이터를 변환 
+- 오래된 날짜의 액션일수록 가중치를 적게주는 방법
+- 사용자들의 최종 접근일과 각 레코드와의 날짜 차이를 계산하는 쿼리
+
+```sql
+WITH
+action_counts_with_diff_date AS (
+  SELECT *
+    -- 사용자별로 최종 접근일과 각 레코드의 날짜 차이 계산
+    -- PostgreSQL, Redshift의 경우 날짜끼리 빼기 연산 가능
+    , MAX(dt::date) OVER(PARTITION BY user_id) AS last_access
+    , MAX(dt::date) OVER(PARTITION BY user_id) - dt::date AS diff_date
+    -- BigQuery의 경우 date_diff 함수 사용하기
+    , MAX(date(timestamp(dt))) OVER(PARTITION BY user_id) AS last_access
+    , date_diff(MAX(date(timestamp(dt))) OVER(PARTITION BY user_id), date(timestamp(dt)), date) AS diff_date
+    -- Hive, SparkSQL의 경우 datediff 함수 사용
+    , MAX(to_date(dt)) OVER(PARTITION BY user_id) AS last_access
+    , datediff(MAX(to_date(dt)) OVER(PARTITION BY user_id), to_date(dt)) AS diff_date
+  FROM
+    action_counts_with_date
+)
+SELECT *
+FROM action_counts_with_diff_date;
+```
+
+- 날짜차이가 클수록 가중치를 적게하기 => 로그에 역수 취하기 
+  - y = 1/(log2(ax+2)) {0 <= x}
+- 날짜 차이에 따른 가중치를 계산하는 쿼리
+
+```sql
+WITH
+action_counts_with_diff_date AS (
+  -- CODE.24.9.
+), action_counts_with_weight AS (
+  SELECT *
+    -- 날짜 차이에 따른 가중치 계산하기(a = 0.1)
+    -- PostgreSQL, Hive, SparkSQL, log(<밑수>, <진수>) 함수 사용
+    , 1.0 / log(2, 0.1 * diff_date + 2) AS weight
+    -- Redshift의 경우 log는 상용 로그만 존재, `log2`로 나눠주기
+    , 1.0 / ( log(CAST(0.1 * diff_date + 2 AS double precision)) / log(2) ) AS weight
+    -- BigQuery의 경우, log(<진수>, <밑수>) 함수 사용
+    , 1.0 / log(0.1 * diff_date + 2, 2) AS weight
+  FROM action_counts_with_diff_date
+)
+SELECT
+  user_id
+  , product
+  , v_count
+  , p_count
+  , diff_date
+  , weight
+FROM action_counts_with_weight
+ORDER BY
+  user_id, product, diff_date DESC
+;
+```
+
+- 가중치를 열람 수와 구매수에 곱해 점수를 계산
+- 일수차에 따른 중첩을 사용해 열람 수와 구매 수 점수를 계산하는 쿼리
+  - 같은 구매수의 상품이라도 구매 날짜가 오래됐다면 점수가 낮게 나옴
+ 
+```sql
+WITH
+action_counts_with_date AS (
+  -- CODE.24.9.
+)
+, action_counts_with_weight AS (
+  -- CODE.24.10.
+)
+, action_scores AS (
+  SELECT
+    user_id
+    , product
+    , SUM(v_count) AS v_count
+    , SUM(v_count * weight) AS v_score
+    , SUM(p_count) AS p_count
+    , SUM(p_count * weight) AS p_score
+  FROM action_counts_with_weight
+  GROUP BY
+    user_id, product
+)
+SELECT *
+FROM action_scores
+ORDER BY
+  user_id, product;
+```
+
+### 24-5 독자적인 점수 계산 방법을 정의해서 순위 작성하기
+
+- 순위 생성 방침
+  - 1년 동안의 계절마다 주기적으로 팔리는 상품과 최근 트렌드 상품 상위에 위치
+  - 1년전의 매출과 최근 1개월의 매출 값으로 가중평균을 냄
+- 분기별 상품 매출액과 매출 합계를 집계하는 쿼리
+
+```sql
+WITH
+item_sales_per_quarters AS (
+  SELECT item
+    -- 2016.1q의 상품 매출 모두 더하기
+    , SUM(
+      CASE WHEN year_month IN ('2016-01', '2016-02', '2016-03') THEN amount ELSE 0 END
+    ) AS sales_2016_q1
+    -- 2016.4q의 상품 매출 모두 더하기
+    , SUM(
+      CASE WHEN year_month IN ('2016-10', '2016-11', '2016-12') THEN amount ELSE 0 END
+    ) AS sales_2016_q4
+  FROM monthly_sales
+  GROUP BY item
+)
+SELECT
+  item
+  -- 2016.1q의 상품 매출
+  , sales_2016_q1
+  -- 2016.1q의 상품 매출 합계
+  , SUM(sales_2016_q1) OVER() AS sum_sales_2016_q1
+  -- 2016.4q의 상품 매출
+  , sales_2016_q4
+  -- 2016.4q의 상품 매출 합계
+  , SUM(sales_2016_q4) OVER() AS sum_sales_2016_q4
+FROM item_sales_per_quaters
+;
+```
+
+- 분기별 상품 매출액을 기반으로 점수를 계산하는 쿼리
+  - min-max 정규화 사용
+
+```sql
+WITH
+item_sales_per_quarters AS (
+  -- CODE.24.12
+)
+, item_scores_per_quarters AS (
+  SELECT
+    item
+    , sales_2016_q1
+    , 1.0
+      * (sales_2016_q1 - MIN(sales_2016_q1) OVER())
+      -- PostgreSQL, Redshift, BigQuery, SparkSQL, NULLIF로 divide 0 회피
+      / NULLIF(MAX(sales_2016_q1) OVER() - MIN(sale_2016_q1) OVER(), 0)
+      -- Hive, CASE 식 사용
+      / (CASE
+          WHEN MAX(sales_2016_q1) OVER() - MIN(sales_2016_q1) OVER() = 0 THEN NULL
+          ELSE MAX(sales_2016_q1) OVER() - MIN(sales_2016_q1) OVER() 
+        END)
+      AS score_2016_q1
+    , sales_2016_q4
+    , 1.0
+      * (sales_2016_q4 - MIN(sales_2016_q4) OVER())
+      -- PostgreSQL, Redshift, BigQuery, SparkSQL, NULLIF로 divide 0 회피
+      / NULLIF(MAX(sales_2016_q4) OVER() - MIN(sales_2016_q4) OVER(), 0)
+      -- Hive, CASE 식 사용
+      / (CASE
+          WHEN MAX(sales_2016_q4) OVER() - MIN(sales_2016_q4) OVER() = THEN NULL
+          ELSE MAX(sales_2016_q4) OVER() - MIN(sales_2016_q4) OVER()
+        END)
+      AS score_2016_q4
+  FROM item_sales_per_quarters
+)
+SELECT *
+FROM item_scores_per_quarters
+;
+```
+
+- 분기별 상품 점수 가중 평균으로 순위를 생성하는 쿼리 (1분기 7:3 4분기)
+
+```sql
+WITH
+item_sales_per_quarters AS (
+  -- CODE.24.12
+),
+item_scores_per_quarters AS (
+  -- CODE.24.13
+)
+SELECT
+  item
+  , 0.7 * score_2016_q1 + 0.3 * score_2016_q4 AS score
+  , ROW_NUMBER()
+      OVER(ORDER BY 0.7 * score_2016_q1 + 0.3 * score_2016_q4 DESC)
+    AS rank
+FROM item_scores_per_quarters
+ORDER BY rank
+;
 ```

@@ -26,7 +26,8 @@
 
 4. 데이터 분석을 위한 SQL 레시피
 - [책 링크](http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=9791162240601)
-- 읽는중...
+- OLAP 쿼리를 얻고 분석가의 입장을 이해할 수 있던 유용했던 책
+- cookbook처럼 필요할 때 꺼내보기 좋은 책
 
 ---
 
@@ -89,3 +90,7 @@
 99. 개인적인 궁금증들을 검색하여 정리한 폴더
 - Redshift vs Bigquery
 - DB multiple index
+- 시계열 데이터 분석
+- python 라이브러리 빌드
+- 실시간 데이터 처리
+- HTTP/HTTPS 차이
