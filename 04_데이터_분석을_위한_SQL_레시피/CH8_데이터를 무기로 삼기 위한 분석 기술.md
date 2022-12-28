@@ -755,3 +755,114 @@ FROM
     ;
     ```
 - 어소시에이션 분석은 두 상품의 상관 규칙만을 주목한 한정적인 분석 방법
+
+## 23강 추천
+
+- 사용자에게 가치 있는 정보를 추천하는 것
+- item to item, user to item
+
+### 23-1 추천 시스템의 넓은 의미
+
+- 추천 시스템의 종류
+  - Item to Item: 아이템과 관련한 개별적인 아이템 제안. 열람/구매한 아이템을 기반으로 다른 아이템 추천
+  - User to Item: 사용자 개인에 최적화된 아이템 제안. 과거의 행동 또는 데모그래픽 정보를 기반으로 흥미와 기호를 유추하여 아이템 추천
+- 모듈의 종류
+  - 리마인드: 사용자의 과거 행동을 기반으로 아이템을 다시 제안해주는 것 ex) 재구매, 최근 본상품
+  - 순위: 열람 수, 구매 수 등을 기반으로 인기있는 아이템 제안
+  - 콘텐츠베이스: 아이템의 추가 정보를 기반으로 아이템 추천 ex) 해당 배우가 출연한 다른 작품
+  - 추천: 사용자 전체의 행동 이력을 기반으로 아이템 제안
+  - 개별 추천: 사용자 개인의 행동 이력을 기반으로 아이템 제안
+- 추천의 효과
+  - 다운셀: 가격이 높아 고민하는 구매자에게 더 저렴한 아이템 제안하여 판매 증가
+  - 크로스셀: 관련 상품을 함께 구매하게 해서 구매 단가를 올림
+  - 업셀: 상웨 모델이나 고성능 아이템을 제안해서 구매 단가를 올림
+- 데이터의 명시적 획득과 암묵적 획득
+  - 명시적 데이터 획득: 사용자에게 직접 기호를 물어봄. 데이터 양은 적지만 정확성은 높음 ex) 리뷰
+  - 암묵적 데이터 획득: 사용자의 행동을 기반으로 시호를 추측. 데이터 양은 많지만 정확도가 떨어짐 ex) 구매, 열람 로그
+- 추천 시스템에는 다양한 목적, 효과, 모듈이 있기 때문에 어떤 효과를 기대하는지 구체화를 한 후 시스템 구축하는 것을 추천!
+
+### 23-2 특정 아이템에 흥미가 있는 사람이 함께 찾아보는 아이템 검색
+
+- Item to Item
+  - User to Item보다 상대적으로 쉬움. 사용자 유동성보다 아이템 유동성이 더 낮아 데이터 축적이 쉽기 때문
+- 접근 로그를 사용해 아이템의 상관도 계산하기
+  - 로그를 기반으로 사용자와 아이템 조합을 구하고 점수를 계산하는 쿼리
+  - 아이템 열람수:구매수 를 3:7로 가중치를 줘서 평균을 구한후 `관심도 점수`로 활용
+  - 열람 수와 구매수를 조합한 점수를 계산하는 쿼리
+
+    ```sql
+    WITH
+    ratings AS (
+    SELECT
+        user_id
+        , product
+        -- 상품 열람 수
+        , SUM(CASE WHEN action = 'view' THEN 1 ELSE 0 END) AS view_count
+        -- 상품 구매 수
+        , SUM(CASE WHEN action = 'purchase' THEN 1 ELSE 0 END) AS purchase_count
+        -- 열람 수 : 구매 수 = 3:7 비율의 가중치 주어 평균 계산
+        , 0.3 * SUM(CASE WHEN action='view' THEN 1 ELSE 0 END)
+        + 0.7 * SUM(CASE WHEN action='purchase' THEN 1 ELSE 0 END)
+        AS score
+    FROM
+        action_log
+    GROUP BY
+        user_id, product
+    )
+    SELECT *
+    FROM
+    ratings
+    ORDER BY
+    user_id, score DESC
+    ;
+    ```
+
+- 아이템 사이의 유사도를 계산하고 순위를 생성하는 쿼리
+
+    ```sql
+    WITH
+    ratings AS (
+    -- CODE.23.1.
+    )
+    SELECT
+    r1.product AS target
+    , r2.product AS related
+    -- 모든 아이템을 열람/구매한 사용자 수
+    , COUNT(r1.user_id) AS users
+    -- 스코어들을 곱하고 합계를 구해 유사도 계산
+    , SUM(r1.socre * r2.score) AS score
+    -- 상품의 유사도 순위 계산
+    , ROW_NUMBER()
+        OVER(PARTITION BY r1.product ORDER BY SUM(r1.score * r2.score) DESC)
+        AS rank
+    FROM
+    ratings AS r1
+    JOIN
+        ratings AS r2
+        -- 공통 사용자가 존재하는 상품의 페어 만들기
+        ON r1.user_id = r2.user_id
+    WHERE
+    -- 같은 아이템의 경우에는 페어 제외하기
+    r1.product <> r2.product
+    GROUP BY
+    r1.product, r2.product
+    ORDER BY
+    target, rank
+    ;
+    ```
+
+- 
+```sql
+```
+```sql
+```
+```sql
+```
+```sql
+``` 
+```sql
+```
+```sql
+```
+```sql
+```
