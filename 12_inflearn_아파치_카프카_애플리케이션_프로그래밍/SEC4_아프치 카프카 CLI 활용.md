@@ -157,7 +157,7 @@ bin/kafka-configs.sh --describe \
 ---
 
 - 토픽에 데이터를 콘솔을 통해 넣을 수 있음
-- 메시지가 key를 갖게 하려면 `key.separatoe`를 설정하고 `delimiter(기본값 \t)`도 맞춰줘야함
+- 메시지가 key를 갖게 하려면 `key.separate`를 설정하고 `delimeter(기본값 \t)`도 맞춰줘야함
 - 동일한 메시지 키의 경우 동일한 파티션에 들어감. 여기서의 핵심은 **동일한 키 내에서 순서를 지킬수 있게 됨!**
 - 메시지 키가 null일 경우 Round Robin방식으로 들어감
 
