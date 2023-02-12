@@ -11,7 +11,7 @@
 - `Java` 라이브러리만 공식적으로 지원해서, Java사용을 권장함. 다른 언어로도 지원은 하나 안정성이나 최신 기능지원 등이 떨어짐
 - 브로커로 데이터를 전송할 때 내부적으로 파티셔너, 배치 생성단계를 거침
 - 내부 구조
-  - ![프로듀서 내부구조](https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.clairvoyant.ai%2Fblog%2Funleash-kafka-producers-architecture-and-internal-workings&psig=AOvVaw0Vva61DoNwKDbrg2q422gS&ust=1675667660548000&source=images&cd=vfe&ved=0CBAQjRxqGAoTCMi5gs_q_fwCFQAAAAAdAAAAABCJAQ)
+  - ![프로듀서 내부구조](https://user-images.githubusercontent.com/37397737/218251229-792faced-8d8d-446f-9297-95480362365f.png)
   - `offset`은 메시지에서 지정하는게 아니라, 클러스터에 데이터가 생성될 때 지정됨
   - 토픽, 메시지 값만 있더라도 데이터 보낼때는 문제 없음
   - 자바 기준 설명
@@ -242,3 +242,4 @@ producer.close()
 - 5) min.insync.replicas=3, 복제 개수가 2일 때 가장 신뢰도 높게 데이터를 전송할 수 있다 (O/X)
   - X 전제조건자체가 틀림.
   - `acks=all`, `min.insync.replicas=2`, `replication factor=3`일 경우 신뢰도가 가장 높음
+    - `min.insync.replicas=3`이 아닌 이유는 팔로워 파티션 중 하나라도 장애가 발생하게 되면 더 이상 토픽에 데이터를 수신/송신할 수 없게 될 가능성이 있어 신뢰도와 지속운영까지 겸비하여 2로 설정이 좋음
