@@ -280,7 +280,6 @@ timer.schedule(task, delay, interval);
 | Syntax | Low level Processor API, High level DSL | SparkSQL |
 | Semantics | Simple | Rich |
 
-
 - 카프카 스트림즈: 카프카 토픽을 input으로 하는 경량 프로세싱 애플리케이션 개발
 - 스파크 스트리밍: 카프카 및 하둡 생태계를 input으로 한 복잡한 프로세싱 개발
 
