@@ -204,6 +204,7 @@ bisect.insort(a, 85)
   dq.extend([11, 22, 33]
   dq.rotate(3)
   ```
+
 - 항목검사 작업이 많다면 `set`
 
 ## 2.10 요약
