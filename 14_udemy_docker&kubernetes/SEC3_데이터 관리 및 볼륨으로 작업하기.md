@@ -70,7 +70,7 @@
   }
   ```
 
-## 요약
+## 볼륨 요약
 
 ---
 
@@ -84,5 +84,65 @@
   - 다른 컨테이너와 새 컨테이너에 attach/detach할 수 있음
   - **도커 영역안에서 관리**
 - bind mounts
-  - host file system위치함
+  - host file system에 위치함
+  - 컨테이너에서 항상 최신의 데이터를 사용할 수 있음
   - 재사용 및 공유 가능
+
+## 읽기 전용 볼륨
+
+---
+
+- 변경이 되면 안되는 볼륨이 있을 때 유용
+- `ro`옵션을 추가하면 됨
+  - `docker run -d -p 3000:80 --rm --name feedback-app -v feedback:/app/feedback feedback-node:volumes:ro`
+
+## Docker 볼륨 관리하기
+
+---
+
+- `docker volume ls`
+  - 바인드 마운트는 표시되지 않음
+  - named volume은 볼륨은 볼륨이 없을경우 자동으로 생성됨
+- `docker volume inspect {volume}`
+  - 볼륨생성 위치, 날짜, 옵션 등 메타정보를 알 수 있음
+- `docker volume rm {volume}`
+  - 컨테이너에서 사용중이지 않은 볼륨만 제거해야 함
+
+## Copy vs Bind mount
+
+---
+
+- 코드의 스냅샷을 유지하고 싶으면 `copy` 사용
+  - `.dockerignore`파일로 copy 제외항목 정할 수 있음
+  - node_modules는 npm install로 설치가 되니, COPY할때 덮어씌우지 않도록 추가하면 됨
+- 개발환경을 지속적으로 반영하고 싶으면 `bind`하여 사용
+
+## Argument & Envirionment
+
+---
+
+- arg
+  - `--build-arg` 옵션
+  - `Dockerfile`내에 명시
+    - Dockerfile내에서만 사용 가능
+    - 컨테이너가 시작될 때 실행되는 런타임 명령이기 때문에 `CMD`에서 사용할 수 없음
+  
+  ```Dockerfile
+  ARG DEFAULT_PORT 80
+  EXPOSE $DEFAULT_PORT
+  ```
+
+- env
+  - `--env` 옵션
+    - `--e PORT=8000`
+  - `Dockerfile`내에 명시
+  
+  ```Dockerfile
+  ENV PORT 80
+  EXPOSE $PORT
+  ```
+
+  - `.env`파일을 만들어서 `--env-file ./.env` 옵션으로도 명시 가능
+  - 보안 데이터는 파일로 관리하고 `.gitignore`에 추가되도록 하기
+
+- arg와 env를 배치할 때 레이어가 추가되지 않도록 `npm install` 다음에 추가하기
