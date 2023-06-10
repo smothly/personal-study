@@ -26,6 +26,9 @@
     - `docker run -d --name mongodb --network favorites-net`
     - **컨테이너 이름을 주소로 사용** ex) `mongodb://{mongodb container name}:27017/swfavorites` 사용
     - 같은 네트워크를 쓰면 따로 포트를 오픈할 필요 없음. 외부로 오픈할 때만 포트를 오픈하도록해야함
-
-
-
+    - 다양한 드라이버 지원
+      - default는 bridge 드라이버
+      - host: 컨테이너와 호스트 시스템 간의 격리가 제거됨
+      - overlay: 여러 Docker 데몬이 서로 연결될 수 있음. Swarm모드에서 사용
+      - macvlan: 컨테이너에 커스텀 MAC주소를 설정할 수 있음
+      - none: 모든 네트워킹 비활성화
