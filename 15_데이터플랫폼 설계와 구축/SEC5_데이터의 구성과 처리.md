@@ -51,7 +51,7 @@
 ---
 
 - 일관된 원칙을 구성하여 데이터 레이크 구축
-- ![a](https://i0.wp.com/contenteratechspace.com/wp-content/uploads/2019/05/data-lake-architecture.jpg?fit=1024%2C388&ssl=1)
+- ![구성단계](https://drek4537l1klr.cloudfront.net/zburivsky/Figures/CH05_F03_Zburivsky.png)
 - 데이터 구성 단계
   - 1. 랜딩영역
     - 처리되기 전 일시적인 영역
