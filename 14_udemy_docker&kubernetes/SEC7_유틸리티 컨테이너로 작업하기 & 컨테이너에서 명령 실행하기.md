@@ -19,7 +19,6 @@
   - ex) ENTRYPOINT ["npm"] + (npm) install express --save
   - 컨테이너를 보호하기위한 수단으로도 활용할 수 있음
 - `Docker Compose`를 사용하여 관리하기 더 쉽게 하기
-  
   ```Dockerfile
   version: "3.8"
   services:
@@ -30,27 +29,19 @@
       volumes:
         - ./:/app
   ```
-
   - `docker-compose run --rm npm(서비스 이름) init`
 - 권한
   - docker 명령으로 생성되는 것은 기본적으로 root 권한을 가짐
   - `USER node` + `RUN groupadd --gid 1000 node && useradd --uid 1000 --gid node --shell /bin/bash --create-home node`처럼 node사용자로 실행되게할 수 있음
+  - 만약 Predefined된 1000번 유저가 없다면 아래와 같이 생성해야 하고 명령어를 `docker build -t node-util:cliuser --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g) .` 수행해야 함
 
-  ```
+  ```Dockerfile
   FROM node:14-slim
-
-RUN userdel -r node
-
-ARG USER_ID
-
-ARG GROUP_ID
-
-RUN addgroup --gid $GROUP_ID user
-
-RUN adduser --disabled-password --gecos '' --uid $USER_ID --gid $GROUP_ID user
-
-USER user
-
-WORKDIR /app
+  RUN userdel -r node
+  ARG USER_ID
+  ARG GROUP_ID
+  RUN addgroup --gid $GROUP_ID user
+  RUN adduser --disabled-password --gecos '' --uid $USER_ID --gid $GROUP_ID user
+  USER user
+  WORKDIR /app
   ```
-
