@@ -166,3 +166,12 @@
 - react 코드에 `localhsot` 부분들을 제거함
 - Docker hub에 react 이미지를 빌드하고 푸시
   - `docker build -f frontend/Dockerfile.prod -t <dockerhub-id>/react-app ./frontend`
+- 같은 80 port로 태스크를 생성할 수 없음
+  - backend url을 env.NODE_ENV로 분기처리하여 개발환경이면 localhost주소 사용하고 프로덕션환경이면 LB주소 사용
+
+## 멀티 스테이지 배포
+
+---
+
+- `--target` 옵션을 통해 빌드 스테이지를 선택할 수 있음
+  - `docker build --target <stage-name> -t <dockerhub-id>/react-app ./frontend` 

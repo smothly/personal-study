@@ -1,0 +1,64 @@
+# SEC11 Kubernetes 시작하기
+
+---
+
+## Kubernetes란?
+
+---
+
+- 컨테이너 배포시 문제
+  - 인스턴스 유지관리 문제
+  - 컨테이너 충돌 및 장애
+  - 컨테이너 스케일 인/아웃
+  - 트래픽 분산
+- Why k8s?
+  - ECS 에서도 위와 같은 컨테이너 배포 문제를 해결하고 있음
+    - LB, Auto Scaling, Health Check, etc...
+    - 하지만 서비스에 Lock-in 되어있음 ex) AWS CLI, Console
+- What is k8s?
+  - 컨테이너 오케스트레이션 도구
+    - 컨테이너화된 어플리케이션의 배포, 확장 및 관리를 자동화 하기위한 오픈 소스 시스템
+  - k8s config를 통해서 클라우드 프로바이더에 관계없이 컨테이너를 배포하고 관리
+  - 특징
+    - 오픈소스
+    - 서비스가 아님
+    - 컨셉과 툴의 집합체임
+    - 도커의 대체제가 아니고 컨테이너와 함께 동작함
+  - docker-compose multiple machine
+- 개념
+  - ![k8s](image/k8s.png)
+  - Cluster
+    - Node: VM or Physical Machine
+    - Master Node
+      - 마스터 노드에서 Control Plane을 통해 워커노드를 관리함
+      - API Server
+        - Kublets로 워커노드와 통신
+      - Scheduler
+        - Pod 관찰
+        - 새로운 Pod이 배포될 워커노드 선택
+      - Controller Manager
+        - 워커 노드 전체를 감시하고 관리
+        - Pod 개수 체크
+      - etcd
+    - Worker Node
+      - 워커노드를 스케일 인/아웃 하면서 트래픽에 따라 Pod를 생성하고 삭제하며 워크로드를 분산함
+      - Pod마다 다른 태스크를 수행할 수 있음
+      - Kubelet
+        - 워커노드와 마스터노드 사이의 통신을 관리
+      - Kube Proxy
+        - 네트워크 프록시와 로드밸런싱을 관리
+      - Container Runtime(Docker)
+        - 컨테이너를 실행하고 관리
+    - Pod
+      - 컨테이너의 집합
+      - 워커노드내에서 실행
+- k8s가 하는 일
+  - pod을 생성하고 관리
+  - 모니터링하고 스케일링
+  - configuration파일을 배포하고 업데이트
+- 내가 해야할 일
+  - 클러스터(노드) 생성
+  - API Server, Scheduler, Controller Manager, etcd, Kubelet, Kube Proxy, Container Runtime 설치
+  - File, Network, Storage 설정
+- 중요 용어 & 개념
+  - ![k8s-core](image/k8s-core.png)
