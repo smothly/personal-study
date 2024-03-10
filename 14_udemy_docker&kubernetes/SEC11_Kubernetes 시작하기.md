@@ -118,6 +118,33 @@
     - deployment 생성 명령어를 통해 k8s master node(control plane)에게 deployment를 생성하라고 요청
     - master node의 scheduler가 deployment를 관찰하고 새로운 pod을 배포할 워커노드를 선택
     - 워커노드는 kublet 서비스를 통해 master node와 통신하고 pod을 생성
+  - 업데이트 하기
+
+    ```bash
+    kubectl set image deployment/first-app kub-first-app=academind/kub-first-app # 새 이미지가 아니여서 deployment가 업데이트 되지 않음
+    docker build -t academind/kub-first-app:2 .
+    docker push academind/kub-first-app:2
+    kubectl set image deployment/first-app kub-first-app=academind/kub-first-app:2 # 새 이미지로 변경
+    kubectl rollout status deployment/first-app # 업데이트 상태 확인
+    ```
+
+  - 롤백 & 히스토리
+
+    ```bash
+    kubectl set image deployment/first-app kub-first-app=academind/kub-first-app:3 # 없는 태그의 이미지로 변경
+    kubectl rollout status deployment/first-app # 1 old replicas are pending termination 메세제와 함께 대기중
+    kubectl rollout undo deployment/first-app # 롤백
+    kubectl rollout history deployment/first-app # 롤백 히스토리 확인
+    kubectl rollout history deployment/first-app --revision=3 # 특정 버전의 자세한 히스토리 확인
+    kubectl rollout undo deployment/first-app --to-revision=1 # 특정 버전으로 롤백
+    ```
+
+    - 롤링 업데이트 전략때문에 새 Pod이 실행되기 전까지 기존 Pod이 종료되지 않음
+
+    ```bash
+    kubectl delete deployment first-app # deployment 삭제
+    ```
+
 - services
   - pod에 실행되는 컨테이너에 접근하려면 필요
   - 내부 IP기 때문에 외부에서 접근 불가하고 pod이 교체되면 IP가 변경되는 문제가 있어 내부 IP를 사용할 수 없음
@@ -135,7 +162,60 @@
 - volume
 - 명령적 vs 선언적
   - 명령적: 명령어를 통해 직접 실행
+    - `docker run ...`과 같이 명령어를 통해 실행
+
+    ```bash
+    kubctl create deployment ...
+    ```
+
   - 선언적: 파일을 통해 실행
+    - yaml 파일로 선언
+    - `docker-compose.yml`과 같이 파일을 통해 실행
+
+    ```yaml
+    apiVersion: apps/v1 # api 버전(최신)
+    kind: Deployment # 쿠버네티스 객체 종류
+    metadata: # 객체의 메타데이터
+      name: second-app-deployments # 객체의 이름
+    spec: # 객체의 스펙
+      replicas: 1 # pod의 수
+      template: # pod의 템플릿
+        metadata: # pod의 메타데이터
+          labels: # pod의 라벨
+            app: second-app
+            tier: backend
+        spec: # pod의 스펙
+          containers: # 컨테이너. 여러개의 컨테이너를 가질 수 있음
+            - name: second-app # 컨테이너의 이름
+              image: diabolicus23/kub-first-app:2 # 이미지 전체 이름
+              ports: # 컨테이너의 포트
+                - containerPort: 8080
+      selector: # pod을 선택하는 방법
+        matchLabels: # pod의 라벨
+          app: second-app
+          tier: backend
+    ```
+
+    ```yaml
+    apiVersion: v1 # api 버전(최신)
+    kind: Service # 쿠버네티스 객체 종류
+    metadata: # 객체의 메타데이터
+      name: backend # 객체의 이름
+    spec: # 객체의 스펙
+      selector: # 서비스가 선택하는 방법
+        app: second-app
+      ports: # 서비스의 포트
+        - protocol: TCP
+          port: 80 # 외부에서 접근하는 포트
+          targetPort: 8080 # 컨테이너의 포트
+      type: LoadBalancer # 서비스의 타입
+    ```
+
+    ```bash
+    kubectl apply -f deployment.yaml
+    kubectl apply -f service.yaml
+    ```
+
 - scailing
   - pod이 중지되면 replicas 숫자에 맞춰서 새로운 pod을 생성함
   - 수동 스케일링
