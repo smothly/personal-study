@@ -216,6 +216,16 @@
     kubectl apply -f service.yaml
     ```
 
+    - 리소스 업데이트
+      - `kubectl apply -f deployment.yaml`로 업데이트 가능
+    - 리소스 삭제
+      - 선언적, 명령적 두 방식으로 다 삭제 가능
+      - `kubectl delete -f=deployment.yaml -f=service.yaml`로 삭제 가능
+      - `kubectl delete deployment second-app-deployments`로 삭제 가능
+    - `---`로 여러개의 리소스를 한 파일에 작성 가능
+      - service와 deployment를 한 파일에 작성 가능함. service가 먼저 생성되어야 하기 때문에 service를 먼저 작성해야함
+      - 
+
 - scailing
   - pod이 중지되면 replicas 숫자에 맞춰서 새로운 pod을 생성함
   - 수동 스케일링
